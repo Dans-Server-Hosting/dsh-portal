@@ -20,11 +20,11 @@
 
 ## Done when
 
-1. A stranger with a UserAuth account can go from `/` to a joinable server address in under two minutes with no human involved.
-2. The state pill changes from asleep to awake within a minute of a player joining, without a page reload.
-3. Delete asks for the server name to be typed and says a backup is taken first.
-4. Works at phone width.
-5. Playwright smoke test covers create → see → delete against a mocked `dsh-api`.
+1. [ ] A stranger with a UserAuth account can go from `/` to a joinable server address in under two minutes with no human involved. *(The portal side is built; this needs a deployed `dsh-api` and public UserAuth registration to be measured.)*
+2. [x] The state pill changes from asleep to awake within a minute of a player joining, without a page reload. *(Polled every 10 s while the tab is visible; the transition is covered by the smoke test.)*
+3. [x] Delete asks for the server name to be typed and says a backup is taken first.
+4. [x] Works at phone width. *(400 px screenshots are taken on every test run and checked for horizontal overflow.)*
+5. [x] Playwright smoke test covers create → see → delete against a mocked `dsh-api`.
 
 ## Not in the MVP
 
