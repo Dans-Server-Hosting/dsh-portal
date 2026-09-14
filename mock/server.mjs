@@ -35,16 +35,16 @@ const FEEDBACK_PER_HOUR = 10;
 const HOUR_MS = 60 * 60 * 1000;
 
 const LIMITS = {
-  heap: "3G",
-  memory_limit: "3.5Gi",
-  world_quota: "5Gi",
+  servers_per_tenant: 1,
+  heap_gb: 3.0,
+  memory_limit_gib: 3.5,
+  world_quota_gib: 5.0,
   idle_minutes: 20,
-  max_awake: 12,
-  max_registered: 40,
+  max_awake_servers: 12,
+  max_registered_servers: 40,
   archive_after_days: 60,
   backup_retention_days: 14,
   minecraft_version: "26.2",
-  max_servers_per_tenant: 1,
 };
 
 /** @type {Map<string, Map<string, object>>} tenant -> name -> server */
@@ -312,8 +312,8 @@ async function handle(req, res) {
       });
     }
     if (findServer(name)) return send(res, 409, { message: `the name '${name}' is already taken` });
-    if (servers.size >= LIMITS.max_servers_per_tenant) {
-      return send(res, 403, { message: `the free tier allows ${LIMITS.max_servers_per_tenant} server per account` });
+    if (servers.size >= LIMITS.servers_per_tenant) {
+      return send(res, 403, { message: `the free tier allows ${LIMITS.servers_per_tenant} server per account` });
     }
     const server = {
       name,

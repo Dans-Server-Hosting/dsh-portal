@@ -3,17 +3,18 @@
 
 export type ServerState = "asleep" | "waking" | "awake" | "failed";
 
+// Exactly what dsh-api's GET /api/v1/limits returns.
 export interface Limits {
-  heap: string;
-  memory_limit: string;
-  world_quota: string;
+  servers_per_tenant: number;
+  heap_gb: number;
+  memory_limit_gib: number;
+  world_quota_gib: number;
   idle_minutes: number;
-  max_awake: number;
-  max_registered: number;
+  max_awake_servers: number;
+  max_registered_servers: number;
   archive_after_days: number;
   backup_retention_days: number;
   minecraft_version: string;
-  max_servers_per_tenant: number;
 }
 
 export interface Server {

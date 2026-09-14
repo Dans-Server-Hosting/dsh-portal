@@ -26,7 +26,7 @@ export default async function ServersPage({ searchParams }: { searchParams: Prom
     <Stack spacing={2}>
       {params.deleted && <Alert severity="success">{params.deleted} was deleted. A backup was taken first.</Alert>}
       {loadError && <Alert severity="error">Your servers could not be loaded: {loadError}</Alert>}
-      <ServerList initial={servers} maxServers={limits?.max_servers_per_tenant ?? null} />
+      <ServerList initial={servers} maxServers={limits?.servers_per_tenant ?? null} />
     </Stack>
   );
 }
