@@ -1,0 +1,26 @@
+# The apex of dansserverhosting.com through Traefik with a Let's Encrypt
+# certificate. Until the DNS record exists, cert-manager cannot complete the
+# HTTP-01 challenge and the route serves Traefik's default certificate.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dsh-portal
+  namespace: dsh-portal
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts: [dansserverhosting.com]
+      secretName: dsh-portal-tls
+  rules:
+    - host: dansserverhosting.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dsh-portal
+                port:
+                  name: http

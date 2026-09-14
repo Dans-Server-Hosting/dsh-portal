@@ -42,8 +42,10 @@ export async function getSession(): Promise<Session | null> {
   return { token, username: decodeSubject(token) };
 }
 
-export function sessionCookieOptions(token: string) {
-  const exp = tokenExpiry(token);
+/** Cookie lifetime follows UserAuth's `expiresAt`, falling back to the JWT's `exp`. */
+export function sessionCookieOptions(token: string, expiresAt?: string) {
+  const fromResponse = expiresAt ? Math.floor(new Date(expiresAt).getTime() / 1000) : NaN;
+  const exp = Number.isFinite(fromResponse) ? fromResponse : tokenExpiry(token);
   const maxAge = exp ? Math.max(0, exp - Math.floor(Date.now() / 1000)) : ONE_DAY_SECONDS;
   return {
     httpOnly: true,

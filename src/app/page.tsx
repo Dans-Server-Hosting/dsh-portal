@@ -39,14 +39,12 @@ function Fact({ value, label }: { value: string; label: string }) {
   );
 }
 
-export default async function LandingPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const [limits, session, params] = await Promise.all([loadLimits(), getSession(), searchParams]);
+export default async function LandingPage() {
+  const [limits, session] = await Promise.all([loadLimits(), getSession()]);
   const perTenant = limits?.max_servers_per_tenant ?? 1;
 
   return (
     <Stack spacing={5}>
-      {params.error === "sign-in-failed" && <Alert severity="error">Sign-in did not complete. Please try again.</Alert>}
-
       <Box>
         <Typography variant="h1" component="h1" gutterBottom>
           A free Minecraft server for you and your friends.
@@ -61,9 +59,14 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
               Go to my servers
             </Button>
           ) : (
-            <Button component="a" href="/auth/login" variant="contained" size="large" data-testid="sign-in">
-              Sign in to get started
-            </Button>
+            <>
+              <Button component={Link} href="/auth/login" variant="contained" size="large" data-testid="sign-in">
+                Sign in
+              </Button>
+              <Button component={Link} href="/auth/register" variant="outlined" size="large" data-testid="create-account">
+                Create account
+              </Button>
+            </>
           )}
         </Stack>
       </Box>
@@ -82,7 +85,7 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             <Fact value={`${limits.archive_after_days} days`} label="idle before a server is archived" />
           </Grid>
         ) : (
-          <Alert severity="warning">The current limits could not be loaded. Sign in and try again in a moment.</Alert>
+          <Alert severity="warning">The current limits could not be loaded. Try again in a moment.</Alert>
         )}
       </Box>
 

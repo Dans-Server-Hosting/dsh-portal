@@ -11,8 +11,12 @@
 //   GET    /api/v1/servers/{name}
 //   POST   /api/v1/servers/{name}/wake     202
 //   DELETE /api/v1/servers/{name}          204 | 409 players online (unless ?force=true)
-// plus a fake UserAuth and test-only controls:
-//   GET    /userauth/login?redirect=<url>  302 -> <url>?token=<fake jwt>
+// plus a fake UserAuth (the same REST shape as the real one, in memory):
+//   POST   /userauth/register              201 | 400 rules | 409 taken
+//   POST   /userauth/login                 200 { token, tokenType, expiresAt, refreshToken } | 401
+//   GET    /userauth/session/validate      200 | 401
+//   POST   /userauth/logout                204, revokes the bearer
+// and test-only controls:
 //   POST   /mock/servers/{name}/state      { state, players_online } (simulate a player joining)
 //   POST   /mock/reset
 import http from "node:http";
@@ -37,34 +41,54 @@ const LIMITS = {
 /** @type {Map<string, Map<string, object>>} tenant -> name -> server */
 const tenants = new Map();
 const wakeTimers = new Map();
+/** @type {Map<string, {id: number, username: string, password: string, email: string|null, createdAt: string}>} lowercased username -> user */
+const users = new Map();
+/** @type {Map<string, {username: string, issuedAt: string, expiresAt: string}>} token -> session */
+const sessions = new Map();
+const TOKEN_TTL_MS = 60 * 60 * 1000;
 
 const b64url = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url");
 
 function issueToken(username) {
+  const now = Date.now();
   const header = b64url({ alg: "none", typ: "JWT" });
   const payload = b64url({
     sub: username,
-    iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + 3600,
+    iat: Math.floor(now / 1000),
+    exp: Math.floor((now + TOKEN_TTL_MS) / 1000),
     iss: "mock-userauth",
   });
-  return `${header}.${payload}.mock-signature`;
+  const token = `${header}.${payload}.${Math.random().toString(36).slice(2)}`;
+  sessions.set(token, { username, issuedAt: new Date(now).toISOString(), expiresAt: new Date(now + TOKEN_TTL_MS).toISOString() });
+  return token;
+}
+
+function bearerOf(req) {
+  const m = /^Bearer (.+)$/.exec(req.headers.authorization || "");
+  return m ? m[1] : null;
+}
+
+/** The username behind a live, unrevoked token, or null. */
+function sessionOf(req) {
+  const token = bearerOf(req);
+  if (!token) return null;
+  const session = sessions.get(token);
+  if (!session) return null;
+  if (new Date(session.expiresAt).getTime() < Date.now()) return null;
+  return { token, ...session };
 }
 
 function tenantOf(req) {
-  const auth = req.headers.authorization || "";
-  const m = /^Bearer (.+)$/.exec(auth);
-  if (!m) return null;
-  const parts = m[1].split(".");
-  if (parts.length !== 3) return null;
-  try {
-    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString());
-    if (!payload.sub) return null;
-    if (payload.exp && payload.exp * 1000 < Date.now()) return null;
-    return String(payload.sub);
-  } catch {
-    return null;
-  }
+  return sessionOf(req)?.username ?? null;
+}
+
+function passwordProblem(password) {
+  if (typeof password !== "string" || password.length < 8 || password.length > 72) return "password must be 8-72 characters";
+  if (!/[a-z]/.test(password)) return "password must contain a lowercase letter";
+  if (!/[A-Z]/.test(password)) return "password must contain an uppercase letter";
+  if (!/[0-9]/.test(password)) return "password must contain a digit";
+  if (!/[^A-Za-z0-9]/.test(password)) return "password must contain a special character";
+  return null;
 }
 
 function serversFor(tenant) {
@@ -132,19 +156,51 @@ async function handle(req, res) {
   if (method === "OPTIONS") return send(res, 204);
 
   // ---- fake UserAuth ----
-  if (pathname === "/userauth/login") {
-    const redirect = url.searchParams.get("redirect");
-    if (!redirect) return send(res, 400, { message: "redirect is required" });
-    const user = url.searchParams.get("user") || "mock-user";
-    const target = new URL(redirect);
-    target.searchParams.set("token", issueToken(user));
-    res.writeHead(302, { location: target.toString() });
-    return res.end();
+  if (pathname === "/userauth/register" && method === "POST") {
+    const body = await readJson(req);
+    if (!body) return send(res, 400, { message: "body must be JSON" });
+    const username = typeof body.username === "string" ? body.username.trim() : "";
+    if (username.length < 3 || username.length > 50) return send(res, 400, { message: "username must be 3-50 characters" });
+    const problem = passwordProblem(body.password);
+    if (problem) return send(res, 400, { message: problem });
+    const email = typeof body.email === "string" && body.email.trim() ? body.email.trim() : null;
+    if (email && !/^[^@\s]+@[^@\s]+$/.test(email)) return send(res, 400, { message: "email is not valid" });
+    if (users.has(username.toLowerCase())) return send(res, 409, { message: "username is already taken" });
+    if (email && [...users.values()].some((u) => u.email?.toLowerCase() === email.toLowerCase())) {
+      return send(res, 409, { message: "email is already taken" });
+    }
+    const user = { id: users.size + 1, username, password: body.password, email, createdAt: new Date().toISOString() };
+    users.set(username.toLowerCase(), user);
+    return send(res, 201, { id: user.id, username: user.username, email: user.email, createdAt: user.createdAt });
+  }
+  if (pathname === "/userauth/login" && method === "POST") {
+    const body = await readJson(req);
+    if (!body || typeof body.username !== "string" || typeof body.password !== "string" || !body.username || !body.password) {
+      return send(res, 400, { message: "username and password are required" });
+    }
+    const user = users.get(body.username.trim().toLowerCase());
+    if (!user || user.password !== body.password) return send(res, 401, { message: "invalid username or password" });
+    const token = issueToken(user.username);
+    const session = sessions.get(token);
+    return send(res, 200, { token, tokenType: "Bearer", expiresAt: session.expiresAt, refreshToken: `refresh-${Math.random().toString(36).slice(2)}` });
+  }
+  if (pathname === "/userauth/session/validate" && method === "GET") {
+    const session = sessionOf(req);
+    if (!session) return send(res, 401, { message: "invalid or expired token" });
+    return send(res, 200, { valid: true, username: session.username, roles: ["USER"], issuedAt: session.issuedAt, expiresAt: session.expiresAt });
+  }
+  if (pathname === "/userauth/logout" && method === "POST") {
+    const token = bearerOf(req);
+    if (!token || !sessions.has(token)) return send(res, 401, { message: "invalid or expired token" });
+    sessions.delete(token);
+    return send(res, 204);
   }
 
   // ---- test-only controls ----
   if (method === "POST" && pathname === "/mock/reset") {
     tenants.clear();
+    users.clear();
+    sessions.clear();
     for (const t of wakeTimers.values()) clearTimeout(t);
     wakeTimers.clear();
     return send(res, 204);

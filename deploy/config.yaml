@@ -1,0 +1,18 @@
+# Everything the portal needs is a URL of another in-cluster service; it holds
+# no credentials of its own, so this is a ConfigMap rather than a Secret.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dsh-portal
+  namespace: dsh-portal
+data:
+  # dsh-api's Service listens on port 80 (targetPort 8000 in its pod).
+  DSH_API_URL: http://dsh-api.dsh-api.svc.cluster.local
+  # UserAuth's REST API (POST /login, /register, /logout).
+  USERAUTH_URL: http://userauth.userauth.svc.cluster.local:9998
+  # Public origin, used for redirects after sign-out.
+  PORTAL_URL: https://dansserverhosting.com
+  # The session cookie is Secure: TLS terminates at Traefik, but the browser
+  # only ever sees https://dansserverhosting.com.
+  DSH_SECURE_COOKIE: "1"
+  NEXT_TELEMETRY_DISABLED: "1"
