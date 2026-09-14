@@ -18,6 +18,8 @@
 | `/servers/new` | name, MOTD, your Minecraft username (becomes operator) → create |
 | `/servers/[name]` | one server: address, state, last woken, dashboard link, delete with confirmation |
 | `/auth/login`, `/auth/register` | the portal's own forms over UserAuth's REST API |
+| `/feedback` | a Feedback link on every signed-in page opens a textarea; the message and the page it was about go to `POST /api/v1/feedback` |
+| `/admin/feedback` | when `GET /api/v1/me` says `is_admin`: what users sent, newest first, New / Read / All, Mark read / Mark new; "not found" for anyone else |
 
 ## Done when
 
@@ -26,11 +28,12 @@
 3. [x] Delete asks for the server name to be typed and says a backup is taken first.
 4. [x] Works at phone width. *(400 px screenshots are taken on every test run and checked for horizontal overflow.)*
 5. [x] Playwright smoke test covers create → see → delete against a mocked `dsh-api`.
+6. [x] A signed-in user can send feedback from any page and an admin can read it in the portal and mark it read. *(Covered by the smoke test at both viewports.)*
 
 ## Not in the MVP
 
 - Editing server settings (difficulty, plugins) — the OMCSI dashboard already does that; the portal links to it.
-- Admin views, billing, a paid tier.
+- Admin views beyond the feedback inbox, billing, a paid tier.
 - Public server listing / discovery.
 
 ## Depends on
