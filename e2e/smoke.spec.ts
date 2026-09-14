@@ -4,6 +4,8 @@ import path from "node:path";
 import { MOCK_URL } from "../playwright.config";
 
 const SERVER = "smoke-test";
+const USER = "smoke-user";
+const PASSWORD = "Sm0ke-test!";
 const SCREENSHOT_DIR = path.join(__dirname, "..", "test-results", "screenshots");
 
 /** Full-page screenshot per project, plus a check that nothing overflows sideways. */
@@ -41,10 +43,23 @@ test("create → see → delete", async ({ page, context }, testInfo) => {
   await expect(limits).toContainText("3G heap");
   await expect(limits).toContainText("1 server");
   await expect(page.getByText("After 20 minutes with nobody online")).toBeVisible();
+  await expect(page.getByTestId("sign-in")).toHaveAttribute("href", "/auth/login");
   await snapshot(page, testInfo, "landing");
 
-  // ---- sign in through (mock) UserAuth; the JWT lands in an httpOnly cookie ----
-  await page.getByTestId("sign-in").click();
+  // ---- register on the portal's own form; the rules are checked before UserAuth is asked ----
+  await page.getByTestId("create-account").click();
+  await expect(page).toHaveURL(/\/auth\/register$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Create an account");
+  await snapshot(page, testInfo, "register");
+  await page.getByTestId("username-input").fill(USER);
+  await page.getByTestId("password-input").fill("weak");
+  await page.getByTestId("register-submit").click();
+  await expect(page.getByTestId("auth-error")).toContainText("The password needs");
+  await page.getByTestId("password-input").fill(PASSWORD);
+  await page.getByTestId("email-input").fill("smoke@example.com");
+  await page.getByTestId("register-submit").click();
+
+  // ---- registration signs in straight away; the JWT lands in an httpOnly cookie ----
   await expect(page).toHaveURL(/\/servers$/);
   const session = (await context.cookies()).find((c) => c.name === "dsh_session");
   expect(session, "session cookie is set").toBeTruthy();
@@ -138,22 +153,48 @@ test("create → see → delete", async ({ page, context }, testInfo) => {
   await expect(page.getByTestId("empty-state")).toBeVisible();
   await expect(page.getByTestId("server-card")).toHaveCount(0);
 
-  // ---- sign out clears the cookie ----
+  // ---- sign out revokes the token and clears the cookie ----
+  const token = session!.value;
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/$/);
   expect((await context.cookies()).find((c) => c.name === "dsh_session")).toBeUndefined();
   await expect(page.getByTestId("sign-in")).toBeVisible();
-});
+  const validate = await fetch(`${MOCK_URL}/userauth/session/validate`, { headers: { authorization: `Bearer ${token}` } });
+  expect(validate.status, "the token is revoked at UserAuth").toBe(401);
 
-test("protected pages send a signed-out visitor through sign-in", async ({ page }) => {
-  await page.goto("/servers/new");
-  // The mock UserAuth signs in instantly, so the round trip ends on /servers.
+  // ---- sign in again on the login form: a wrong password is refused plainly ----
+  await page.getByTestId("sign-in").click();
+  await expect(page).toHaveURL(/\/auth\/login$/);
+  await snapshot(page, testInfo, "login");
+  await page.getByTestId("username-input").fill(USER);
+  await page.getByTestId("password-input").fill("not-the-password");
+  await page.getByTestId("login-submit").click();
+  await expect(page.getByTestId("auth-error")).toContainText("do not match");
+  await page.getByTestId("password-input").fill(PASSWORD);
+  await page.getByTestId("login-submit").click();
   await expect(page).toHaveURL(/\/servers$/);
+  await expect(page.getByTestId("empty-state")).toBeVisible();
 });
 
-test("a bad callback does not create a session", async ({ page, context }) => {
-  await page.goto("/auth/callback?token=not-a-jwt");
-  await expect(page).toHaveURL(/\/\?error=sign-in-failed$/);
-  await expect(page.getByText("Sign-in did not complete")).toBeVisible();
-  expect((await context.cookies()).find((c) => c.name === "dsh_session")).toBeUndefined();
+test("protected pages send a signed-out visitor to the sign-in form", async ({ page }) => {
+  await page.goto("/servers/new");
+  await expect(page).toHaveURL(/\/auth\/login$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Sign in");
+  await page.getByTestId("register-link").click();
+  await expect(page).toHaveURL(/\/auth\/register$/);
+});
+
+test("a taken username is refused at registration", async ({ page }) => {
+  const taken = await fetch(`${MOCK_URL}/userauth/register`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: USER, password: PASSWORD }),
+  });
+  expect(taken.status).toBe(201);
+  await page.goto("/auth/register");
+  await page.getByTestId("username-input").fill(USER.toUpperCase());
+  await page.getByTestId("password-input").fill(PASSWORD);
+  await page.getByTestId("register-submit").click();
+  await expect(page.getByTestId("auth-error")).toContainText("already taken");
+  await expect(page).toHaveURL(/\/auth\/register$/);
 });
