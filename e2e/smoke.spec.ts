@@ -1,25 +1,10 @@
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
-import { mkdirSync } from "node:fs";
-import path from "node:path";
+import { expect, test } from "@playwright/test";
 import { MOCK_URL } from "../playwright.config";
+import { resetMock, snapshot } from "./helpers";
 
 const SERVER = "smoke-test";
 const USER = "smoke-user";
 const PASSWORD = "Sm0ke-test!";
-const SCREENSHOT_DIR = path.join(__dirname, "..", "test-results", "screenshots");
-
-/** Full-page screenshot per project, plus a check that nothing overflows sideways. */
-async function snapshot(page: Page, testInfo: TestInfo, name: string) {
-  mkdirSync(SCREENSHOT_DIR, { recursive: true });
-  const file = path.join(SCREENSHOT_DIR, `${testInfo.project.name}-${name}.png`);
-  await page.screenshot({ path: file, fullPage: true });
-  await testInfo.attach(`${testInfo.project.name}-${name}`, { path: file, contentType: "image/png" });
-  const overflow = await page.evaluate(() => ({
-    scrollWidth: document.documentElement.scrollWidth,
-    innerWidth: window.innerWidth,
-  }));
-  expect(overflow.scrollWidth, `${name} must not scroll horizontally`).toBeLessThanOrEqual(overflow.innerWidth);
-}
 
 async function setMockState(state: string, playersOnline: number | null) {
   const response = await fetch(`${MOCK_URL}/mock/servers/${SERVER}/state`, {
@@ -30,9 +15,7 @@ async function setMockState(state: string, playersOnline: number | null) {
   expect(response.ok).toBeTruthy();
 }
 
-test.beforeEach(async () => {
-  await fetch(`${MOCK_URL}/mock/reset`, { method: "POST" });
-});
+test.beforeEach(resetMock);
 
 test("create → see → delete", async ({ page, context }, testInfo) => {
   // ---- landing: limits come from the API, and there is a Sign in ----

@@ -46,7 +46,7 @@ export async function portalFetch<T>(path: string, init: RequestInit = {}): Prom
 }
 
 /** Turns an API failure into a sentence a person can act on. */
-export function explain(error: unknown, context: "create" | "delete" | "wake" | "load"): string {
+export function explain(error: unknown, context: "create" | "delete" | "wake" | "load" | "feedback" | "feedback-status"): string {
   if (error instanceof PortalError) {
     switch (error.status) {
       case 403:
@@ -54,7 +54,7 @@ export function explain(error: unknown, context: "create" | "delete" | "wake" | 
           ? "Your account is at its server limit. Delete a server before creating another."
           : "You do not have permission to do that.";
       case 404:
-        return "That server no longer exists.";
+        return context === "feedback-status" ? "That feedback no longer exists." : "That server no longer exists.";
       case 409:
         return context === "create"
           ? "That name is already taken. Pick another."
@@ -62,7 +62,9 @@ export function explain(error: unknown, context: "create" | "delete" | "wake" | 
             ? "Players are online right now. Tick the box to delete anyway."
             : error.message;
       case 422:
-        return `That name is not allowed: ${error.message}`;
+        return context === "feedback" ? `That could not be sent: ${error.message}` : `That name is not allowed: ${error.message}`;
+      case 429:
+        return "You have sent a lot of feedback in the last hour. Thank you; please try again later.";
       case 502:
         return "The hosting service is not reachable right now. Try again in a moment.";
       default:

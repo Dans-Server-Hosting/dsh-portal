@@ -11,6 +11,10 @@
 //   GET    /api/v1/servers/{name}
 //   POST   /api/v1/servers/{name}/wake     202
 //   DELETE /api/v1/servers/{name}          204 | 409 players online (unless ?force=true)
+//   GET    /api/v1/me                      { username, is_admin }  (admin when the username is "admin")
+//   POST   /api/v1/feedback                201 | 422 message missing/too long | 429 more than 10 an hour
+//   GET    /api/v1/feedback?status=new|read|all   admin only (403), newest first
+//   PATCH  /api/v1/feedback/{id}           { status: "read" | "new" }  admin only (403) | 404
 // plus a fake UserAuth (the same REST shape as the real one, in memory):
 //   POST   /userauth/register              201 | 400 rules | 409 taken
 //   POST   /userauth/login                 200 { token, tokenType, expiresAt, refreshToken } | 401
@@ -19,11 +23,16 @@
 // and test-only controls:
 //   POST   /mock/servers/{name}/state      { state, players_online } (simulate a player joining)
 //   POST   /mock/reset
+//   POST   /mock/feedback/reset            clear feedback and the rate-limit counters only
 import http from "node:http";
 
 const PORT = Number(process.env.MOCK_PORT || 4000);
 const WAKE_MS = Number(process.env.MOCK_WAKE_MS || 3000);
 const NAME_RE = /^[a-z][a-z0-9-]{1,30}$/;
+const ADMIN_USERNAME = "admin";
+const FEEDBACK_MAX_LENGTH = 4000;
+const FEEDBACK_PER_HOUR = 10;
+const HOUR_MS = 60 * 60 * 1000;
 
 const LIMITS = {
   heap: "3G",
@@ -46,6 +55,21 @@ const users = new Map();
 /** @type {Map<string, {username: string, issuedAt: string, expiresAt: string}>} token -> session */
 const sessions = new Map();
 const TOKEN_TTL_MS = 60 * 60 * 1000;
+/** @type {Array<{id: number, username: string, message: string, page: string|null, created_at: string, status: "new"|"read"}>} newest last */
+let feedback = [];
+let nextFeedbackId = 1;
+/** @type {Map<string, number[]>} username -> submission times (ms) within the last hour */
+const feedbackTimes = new Map();
+
+function isAdmin(username) {
+  return username.toLowerCase() === ADMIN_USERNAME;
+}
+
+function resetFeedback() {
+  feedback = [];
+  nextFeedbackId = 1;
+  feedbackTimes.clear();
+}
 
 const b64url = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url");
 
@@ -203,6 +227,11 @@ async function handle(req, res) {
     sessions.clear();
     for (const t of wakeTimers.values()) clearTimeout(t);
     wakeTimers.clear();
+    resetFeedback();
+    return send(res, 204);
+  }
+  if (method === "POST" && pathname === "/mock/feedback/reset") {
+    resetFeedback();
     return send(res, 204);
   }
   let m = /^\/mock\/servers\/([^/]+)\/state$/.exec(pathname);
@@ -219,10 +248,54 @@ async function handle(req, res) {
   // ---- dsh-api ----
   if (pathname === "/api/v1/limits" && method === "GET") return send(res, 200, LIMITS);
 
-  if (!pathname.startsWith("/api/v1/servers")) return send(res, 404, { message: "not found" });
+  if (!pathname.startsWith("/api/v1/servers") && !pathname.startsWith("/api/v1/feedback") && pathname !== "/api/v1/me") {
+    return send(res, 404, { message: "not found" });
+  }
 
   const tenant = tenantOf(req);
   if (!tenant) return send(res, 401, { message: "a valid bearer token is required" });
+
+  if (pathname === "/api/v1/me" && method === "GET") return send(res, 200, { username: tenant, is_admin: isAdmin(tenant) });
+
+  // ---- feedback ----
+  if (pathname === "/api/v1/feedback" && method === "POST") {
+    const body = await readJson(req);
+    if (!body) return send(res, 400, { message: "body must be JSON" });
+    const message = typeof body.message === "string" ? body.message.trim() : "";
+    if (!message || message.length > FEEDBACK_MAX_LENGTH) {
+      return send(res, 422, { message: `message must be 1-${FEEDBACK_MAX_LENGTH} characters` });
+    }
+    const page = typeof body.page === "string" && body.page ? body.page.slice(0, 200) : null;
+    const now = Date.now();
+    const recent = (feedbackTimes.get(tenant) ?? []).filter((t) => now - t < HOUR_MS);
+    if (recent.length >= FEEDBACK_PER_HOUR) {
+      return send(res, 429, { message: `at most ${FEEDBACK_PER_HOUR} pieces of feedback an hour` }, { "retry-after": "3600" });
+    }
+    recent.push(now);
+    feedbackTimes.set(tenant, recent);
+    const item = { id: nextFeedbackId++, username: tenant, message, page, created_at: new Date(now).toISOString(), status: "new" };
+    feedback.push(item);
+    return send(res, 201, item);
+  }
+  if (pathname === "/api/v1/feedback" && method === "GET") {
+    if (!isAdmin(tenant)) return send(res, 403, { message: "admin only" });
+    const status = url.searchParams.get("status") ?? "new";
+    if (!["new", "read", "all"].includes(status)) return send(res, 422, { message: "status must be new, read or all" });
+    const items = feedback.filter((f) => status === "all" || f.status === status);
+    return send(res, 200, [...items].reverse());
+  }
+  m = /^\/api\/v1\/feedback\/(\d+)$/.exec(pathname);
+  if (m && method === "PATCH") {
+    if (!isAdmin(tenant)) return send(res, 403, { message: "admin only" });
+    const item = feedback.find((f) => f.id === Number(m[1]));
+    if (!item) return send(res, 404, { message: `no feedback with id ${m[1]}` });
+    const body = await readJson(req);
+    if (!body || (body.status !== "read" && body.status !== "new")) return send(res, 422, { message: "status must be read or new" });
+    item.status = body.status;
+    return send(res, 200, item);
+  }
+  if (pathname.startsWith("/api/v1/feedback")) return send(res, 404, { message: "not found" });
+
   const servers = serversFor(tenant);
 
   if (pathname === "/api/v1/servers" && method === "GET") {
