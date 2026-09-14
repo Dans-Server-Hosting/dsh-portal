@@ -35,7 +35,9 @@ export default defineConfig({
       command: "node mock/server.mjs",
       url: `${MOCK_URL}/api/v1/limits`,
       reuseExistingServer: !process.env.CI,
-      env: { MOCK_PORT: String(MOCK_PORT), MOCK_WAKE_MS: "2000" },
+      // Provisioning is driven by the tests (POST /mock/servers/{name}/advance),
+      // so it must not move on its own while a step is being looked at.
+      env: { MOCK_PORT: String(MOCK_PORT), MOCK_WAKE_MS: "2000", MOCK_PROVISION_MS: "600000" },
     },
     {
       // The standalone server is what the Dockerfile ships, so it is what is tested.

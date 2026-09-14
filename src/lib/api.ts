@@ -2,25 +2,35 @@ import "server-only";
 import { apiBaseUrl } from "./config";
 import type { CreatedServer, CreateServerRequest, Feedback, FeedbackFilter, FeedbackRequest, FeedbackStatus, Limits, Me, Server } from "./types";
 
-/** An error response from dsh-api, with the upstream status preserved. */
+/**
+ * An error response from dsh-api, with the upstream status preserved. The
+ * body's `detail` (FastAPI's key) or `message` becomes the message; a
+ * `server` field, which the create endpoint adds to its "already being
+ * created" 409, is carried along so the client can link to that server.
+ */
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    public readonly server?: string,
   ) {
     super(message);
     this.name = "ApiError";
   }
 }
 
-async function messageFrom(response: Response): Promise<string> {
+async function errorFrom(response: Response): Promise<ApiError> {
+  let message = response.statusText || `dsh-api returned ${response.status}`;
+  let server: string | undefined;
   try {
     const body = await response.json();
-    if (body && typeof body.message === "string") return body.message;
+    if (body && typeof body.detail === "string") message = body.detail;
+    else if (body && typeof body.message === "string") message = body.message;
+    if (body && typeof body.server === "string") server = body.server;
   } catch {
-    // fall through
+    // no JSON body
   }
-  return response.statusText || `dsh-api returned ${response.status}`;
+  return new ApiError(response.status, message, server);
 }
 
 async function call<T>(path: string, init: RequestInit & { token?: string | null } = {}): Promise<T> {
@@ -31,7 +41,7 @@ async function call<T>(path: string, init: RequestInit & { token?: string | null
   if (token) headers.set("authorization", `Bearer ${token}`);
 
   const response = await fetch(`${apiBaseUrl()}${path}`, { ...rest, headers, cache: "no-store" });
-  if (!response.ok) throw new ApiError(response.status, await messageFrom(response));
+  if (!response.ok) throw await errorFrom(response);
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
@@ -40,6 +50,7 @@ export const api = {
   limits: () => call<Limits>("/api/v1/limits"),
   listServers: (token: string) => call<Server[]>("/api/v1/servers", { token }),
   getServer: (token: string, name: string) => call<Server>(`/api/v1/servers/${encodeURIComponent(name)}`, { token }),
+  /** 202 with the server in state `provisioning`; GET reports the progress from there. */
   createServer: (token: string, body: CreateServerRequest) =>
     call<CreatedServer>("/api/v1/servers", { token, method: "POST", body: JSON.stringify(body) }),
   wakeServer: (token: string, name: string) =>

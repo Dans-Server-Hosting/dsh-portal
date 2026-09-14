@@ -23,14 +23,37 @@ running in the cluster.
   Bearer token. The browser never sees the token; it talks to the portal's
   own `/api/servers*` route handlers. Sign-out revokes the token with
   `POST /logout` before clearing the cookie.
-- State pills refresh every 10 seconds (while the tab is visible) without a
-  page reload.
+- Creating a server is asynchronous: `POST /api/v1/servers` answers **202**
+  with the server in state `provisioning` (and the one-time dashboard
+  password), and the created view shows the address straight away with a
+  live status line that asks for the server every 5 seconds ("Setting up…
+  usually about a minute" → "Starting…" → "Online — ready to join"). While
+  the request itself is in flight the button is disabled and a progress bar
+  says so. A second create during that window is answered by the API with a
+  409 naming the pending server; the portal says "A server is already being
+  created for your account" and links to it, instead of the cap message.
+- State pills (`provisioning`, `asleep`, `waking`, `awake`, `stopped`,
+  `failed`) refresh every 10 seconds (while the tab is visible) without a
+  page reload. `stopped` is a game that exited while its pod stayed up (Stop
+  in the dashboard, or a crash); Wake is enabled for it, as for `asleep` and
+  `failed`.
 - Deleting a server requires typing its name back and says up front that a
   backup is taken first.
 - Every signed-in page has a **Feedback** link in the header. It opens a
   textarea (4000 characters) and sends the message, plus the path the user
   came from, to `POST /api/v1/feedback` through the portal's own route
   handler. The API's 422 and 429 (ten a user an hour) are shown plainly.
+- **Account** (`/account`, linked from the header) changes the password:
+  current, new and confirm, with the same live rule checklist as
+  registration plus "different from your current password". The portal's
+  own `POST /api/account/password` route handler forwards
+  `{ currentPassword, newPassword }` to UserAuth's change-password endpoint
+  with the session's Bearer token. UserAuth's 204 is shown as success with a
+  note that every other session was signed out (this one stays); its 401
+  (wrong current password) and 400 (policy, or the same password again) are
+  shown plainly. The endpoint's path defaults to `POST /password` and is
+  read from `USERAUTH_CHANGE_PASSWORD_PATH`, so `/password/change` (or
+  wherever it settles) is a config change, not a rebuild.
 - `GET /api/v1/me` is fetched server-side, once per request, whenever there
   is a session. When it says `is_admin`, the header gains **Admin · Feedback**
   and `/admin/feedback` lists what users sent (username, relative time, page,
@@ -43,7 +66,8 @@ running in the cluster.
 |---|---|
 | `/` | the free tier (limits fetched live from `GET /api/v1/limits`), how sleeping works, Sign in |
 | `/servers` | the signed-in user's servers: name, address to copy, state pill, Open dashboard, Wake, Delete |
-| `/servers/new` | name, MOTD, Minecraft username (becomes operator) → create; 403/409/422 shown in plain language |
+| `/servers/new` | name, MOTD, Minecraft username (becomes operator) → create (202); address + one-time password with a live status until online; 403/409/422 shown in plain language, "already being created" links to the pending server |
+| `/account` | who is signed in, and a change-password form (current, new, confirm, live rules) → UserAuth via `POST /api/account/password` |
 | `/servers/[name]` | one server: address, state, last woken, dashboard link, delete with typed confirmation |
 | `/feedback` | a textarea with a counter → `POST /api/v1/feedback` with `page` = where the user came from; thanks on success |
 | `/admin/feedback` | admins only: feedback newest first, New / Read / All filter, Mark read / Mark new; "not found" for everyone else |
@@ -59,7 +83,8 @@ All variables are read on the server only; nothing is exposed as
 | Variable | Meaning |
 |---|---|
 | `DSH_API_URL` | Base URL of `dsh-api`, e.g. `https://api.example.com` |
-| `USERAUTH_URL` | Base URL of UserAuth's REST API (`POST /login`, `/register`, `/logout`) |
+| `USERAUTH_URL` | Base URL of UserAuth's REST API (`POST /login`, `/register`, `/logout`, the change-password endpoint) |
+| `USERAUTH_CHANGE_PASSWORD_PATH` | Path of UserAuth's change-password endpoint under `USERAUTH_URL`; defaults to `/password` |
 | `PORTAL_URL` | The portal's own public origin, used for redirects after sign-out (defaults to the request origin) |
 | `DSH_SECURE_COOKIE` | `0` allows the session cookie over plain http for local development; defaults to on in production |
 
@@ -75,11 +100,17 @@ npm run dev                    # terminal 2: portal on :3000
 The mock (`mock/server.mjs`, zero dependencies, in-memory) implements the
 `dsh-api` contract the portal codes against (servers, `/api/v1/me`, and the
 feedback endpoints with their 403 / 422 / 429 behaviours) plus UserAuth's
-`/register`, `/login`, `/session/validate` and `/logout` with the same status
-codes and password rules, under `/userauth`. It also has test-only controls:
-`POST /mock/reset`, `POST /mock/feedback/reset`, and
-`POST /mock/servers/{name}/state` with `{ "state": "awake", "players_online": 1 }`
-to simulate a player joining.
+`/register`, `/login`, `/session/validate`, `/logout` and the change-password
+endpoint (at `USERAUTH_CHANGE_PASSWORD_PATH`, default `/password`) with the
+same status codes and password rules, under `/userauth`. A create answers 202
+in state `provisioning` and moves to `waking` and then `awake` by itself over
+`MOCK_PROVISION_MS` (default 6 s); a second create in that window is the 409.
+It also has test-only controls: `POST /mock/reset`,
+`POST /mock/feedback/reset`, `POST /mock/servers/{name}/state` with
+`{ "state": "awake", "players_online": 1 }` to simulate a player joining (or
+`"stopped"`, or anything else; it also stops the automatic progression for
+that server), and `POST /mock/servers/{name}/advance` to move a server one
+step along provisioning → waking → awake right away.
 
 Nothing is seeded: create an account on `/auth/register` (any username of
 3-50 characters and a password with a lower- and uppercase letter, a digit
@@ -92,11 +123,12 @@ username `admin` as an administrator; every other account is a normal user.
 npm run lint
 npm run typecheck
 npm run build
-npm test            # Playwright: register → sign in → create → see → delete, feedback → admin, desktop + 400px phone
+npm test            # Playwright: register → sign in → create (202 → provisioning → online, 409 while pending, provisioning/stopped pills) → see → delete, feedback → admin, change password, desktop + 400px phone
 ```
 
-`npm test` starts the mock and the standalone production server itself
-(`npm run build` must have run first). It saves a full-page screenshot of
+`npm test` starts the mock (with `MOCK_PROVISION_MS` set high, so the tests
+drive provisioning with the `advance` control) and the standalone production
+server itself (`npm run build` must have run first). It saves a full-page screenshot of
 every page at both viewports under `test-results/screenshots/` and asserts
 that no page scrolls horizontally; CI uploads those screenshots as an
 artifact. The pinned `@playwright/test` version must match the installed

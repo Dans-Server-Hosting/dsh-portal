@@ -52,3 +52,29 @@ export async function signIn(page: Page, username: string, password: string) {
   await page.getByTestId("login-submit").click();
   await expect(page).toHaveURL(/\/servers$/);
 }
+
+/** Moves a mock server one step along provisioning → waking → awake. */
+export async function advanceMock(name: string) {
+  const response = await fetch(`${MOCK_URL}/mock/servers/${name}/advance`, { method: "POST" });
+  expect(response.ok).toBeTruthy();
+}
+
+/** Sets a mock server's state outright (and stops its automatic progression). */
+export async function setMockState(name: string, state: string, playersOnline: number | null = null) {
+  const response = await fetch(`${MOCK_URL}/mock/servers/${name}/state`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ state, players_online: playersOnline }),
+  });
+  expect(response.ok).toBeTruthy();
+}
+
+/** Creates a server straight at the mock API; it comes back 202 in state `provisioning`. */
+export async function createAtMock(token: string, name: string) {
+  const response = await fetch(`${MOCK_URL}/api/v1/servers`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  expect(response.status).toBe(202);
+}

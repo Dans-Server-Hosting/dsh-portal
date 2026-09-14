@@ -35,3 +35,15 @@ export function passwordProblem(password: string): string | null {
   if (failing.length === 0) return null;
   return `The password needs ${failing.map((r) => r.label).join(", ")}.`;
 }
+
+/** The registration rules plus UserAuth's one extra rule for a change: it must differ. */
+export function newPasswordRules(current: string, next: string): PasswordRule[] {
+  return [...passwordRules(next), { label: "different from your current password", ok: next.length > 0 && next !== current }];
+}
+
+export function newPasswordProblem(current: string, next: string): string | null {
+  const problem = passwordProblem(next);
+  if (problem) return problem;
+  if (next === current) return "The new password must be different from your current password.";
+  return null;
+}

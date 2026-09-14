@@ -20,5 +20,7 @@ export async function POST(request: NextRequest) {
   const payload: CreateServerRequest = { name: String(body.name ?? "").trim() };
   if (body.motd?.trim()) payload.motd = body.motd.trim();
   if (body.operator_username?.trim()) payload.operator_username = body.operator_username.trim();
-  return withSession((token) => api.createServer(token, payload), 201);
+  // dsh-api answers 202 with the server in state `provisioning`; the browser
+  // then watches GET /api/servers/{name} until it is awake.
+  return withSession((token) => api.createServer(token, payload), 202);
 }

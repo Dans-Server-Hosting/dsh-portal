@@ -1,19 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { MOCK_URL } from "../playwright.config";
-import { resetMock, snapshot } from "./helpers";
+import { resetMock, setMockState, snapshot } from "./helpers";
 
 const SERVER = "smoke-test";
 const USER = "smoke-user";
 const PASSWORD = "Sm0ke-test!";
-
-async function setMockState(state: string, playersOnline: number | null) {
-  const response = await fetch(`${MOCK_URL}/mock/servers/${SERVER}/state`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ state, players_online: playersOnline }),
-  });
-  expect(response.ok).toBeTruthy();
-}
 
 test.beforeEach(resetMock);
 
@@ -72,9 +63,11 @@ test("create → see → delete", async ({ page, context }, testInfo) => {
   await expect(created).toContainText(`${SERVER}.example.com`);
   await expect(created).toContainText("Dashboard password");
   await expect(created).toContainText("mock-");
+  await expect(page.getByTestId("create-status")).toHaveAttribute("data-state", "provisioning");
   await snapshot(page, testInfo, "created");
 
-  // ---- see: the detail page ----
+  // ---- see: the detail page (the server has been set up and gone idle; create-progress.spec covers the rest) ----
+  await setMockState(SERVER, "asleep", null);
   await page.getByTestId("view-created").click();
   await expect(page).toHaveURL(new RegExp(`/servers/${SERVER}$`));
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(SERVER);
@@ -91,7 +84,7 @@ test("create → see → delete", async ({ page, context }, testInfo) => {
   await expect(page.getByTestId("last-woken")).not.toHaveText("never");
 
   // ---- the list: a player joins and the pill flips without a reload ----
-  await setMockState("asleep", null);
+  await setMockState(SERVER, "asleep", null);
   await page.goto("/servers");
   const card = page.getByTestId("server-card").filter({ hasText: SERVER });
   await expect(card).toBeVisible();
@@ -99,7 +92,7 @@ test("create → see → delete", async ({ page, context }, testInfo) => {
   await page.evaluate(() => {
     (window as unknown as { __noReloadMarker: number }).__noReloadMarker = 42;
   });
-  await setMockState("awake", 1);
+  await setMockState(SERVER, "awake", 1);
   await expect(card.getByTestId("state-pill")).toHaveAttribute("data-state", "awake", { timeout: 20_000 });
   await expect(card).toContainText("1 online");
   expect(await page.evaluate(() => (window as unknown as { __noReloadMarker?: number }).__noReloadMarker)).toBe(42);

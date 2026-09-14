@@ -1,7 +1,13 @@
 // Shapes of what dsh-api returns. Kept in one place so the pages, the
 // route handlers and the mock all agree on the contract.
 
-export type ServerState = "asleep" | "waking" | "awake" | "failed";
+// `provisioning` is what POST /api/v1/servers answers with (202) while the
+// server is being set up; `stopped` is a game process that exited while its
+// pod stayed up (Stop in the dashboard, or a crash), which Wake starts again.
+export type ServerState = "provisioning" | "asleep" | "waking" | "awake" | "stopped" | "failed";
+
+/** States in which Wake does something (dsh-api treats the rest as a no-op). */
+export const WAKEABLE_STATES: readonly ServerState[] = ["asleep", "stopped", "failed"];
 
 // Exactly what dsh-api's GET /api/v1/limits returns.
 export interface Limits {
@@ -27,7 +33,10 @@ export interface Server {
   motd: string;
 }
 
-/** Returned once, by POST /api/v1/servers, and never again. */
+/**
+ * Returned once, by POST /api/v1/servers (202, state `provisioning`), and
+ * never again: the password is not stored anywhere the portal can read.
+ */
 export interface CreatedServer extends Server {
   admin_password?: string;
 }
@@ -40,6 +49,17 @@ export interface CreateServerRequest {
 
 export interface ApiErrorBody {
   message: string;
+  /**
+   * On a 409 from POST /api/v1/servers while another create is still
+   * provisioning: the name of the server being created.
+   */
+  server?: string;
+}
+
+/** What the portal accepts from its own change-password form. */
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
 }
 
 /** Who the token belongs to, from GET /api/v1/me. */
