@@ -23,7 +23,7 @@ test("create → see → delete", async ({ page, context }, testInfo) => {
   await expect(page.getByRole("heading", { level: 1 })).toContainText("free Minecraft server");
   const limits = page.getByTestId("limits");
   await expect(limits).toContainText("Minecraft 26.2");
-  await expect(limits).toContainText("3G heap");
+  await expect(limits).toContainText("3 GB heap");
   await expect(limits).toContainText("1 server");
   await expect(page.getByText("After 20 minutes with nobody online")).toBeVisible();
   await expect(page.getByTestId("sign-in")).toHaveAttribute("href", "/auth/login");

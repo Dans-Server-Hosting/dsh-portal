@@ -41,7 +41,7 @@ function Fact({ value, label }: { value: string; label: string }) {
 
 export default async function LandingPage() {
   const [limits, session] = await Promise.all([loadLimits(), getSession()]);
-  const perTenant = limits?.max_servers_per_tenant ?? 1;
+  const perTenant = limits?.servers_per_tenant ?? 1;
 
   return (
     <Stack spacing={5}>
@@ -79,8 +79,8 @@ export default async function LandingPage() {
           <Grid container spacing={2} data-testid="limits">
             <Fact value={`Minecraft ${limits.minecraft_version}`} label="Java Edition, current version" />
             <Fact value={`${perTenant} server`} label="per account" />
-            <Fact value={`${limits.heap} heap`} label={`${limits.memory_limit} of memory in total`} />
-            <Fact value={limits.world_quota} label="of world storage" />
+            <Fact value={`${limits.heap_gb} GB heap`} label={`${limits.memory_limit_gib} GiB of memory in total`} />
+            <Fact value={`${limits.world_quota_gib} GB`} label="of world storage" />
             <Fact value={`${limits.backup_retention_days} days`} label="of backups kept" />
             <Fact value={`${limits.archive_after_days} days`} label="idle before a server is archived" />
           </Grid>
@@ -103,7 +103,7 @@ export default async function LandingPage() {
           </Typography>
           <Typography component="li">
             After {limits ? `${limits.idle_minutes} minutes` : "a while"} with nobody online it goes back to sleep.
-            {limits && ` Up to ${limits.max_awake} servers can be awake at once across the whole service, so a wake can occasionally queue.`}
+            {limits && ` Up to ${limits.max_awake_servers} servers can be awake at once across the whole service, so a wake can occasionally queue.`}
           </Typography>
           <Typography component="li">
             A server nobody has woken for {limits ? `${limits.archive_after_days} days` : "a long time"} is archived;
