@@ -19,7 +19,7 @@ export function userAuthUrl(): string {
   return trimSlash(value);
 }
 
-/** The portal's own public origin, used to build the sign-in callback. */
+/** The portal's own public origin, used for redirects after sign-out. */
 export function portalUrl(requestOrigin: string): string {
   return trimSlash(process.env.PORTAL_URL || requestOrigin);
 }

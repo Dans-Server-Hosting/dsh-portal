@@ -34,7 +34,7 @@ export default async function SiteHeader() {
             </Box>
           </>
         ) : (
-          <Button component="a" href="/auth/login" size="small" variant="contained">
+          <Button component={Link} href="/auth/login" size="small" variant="contained">
             Sign in
           </Button>
         )}
