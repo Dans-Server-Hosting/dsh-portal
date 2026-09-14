@@ -17,6 +17,8 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+        runAsUser: 10003
+        runAsGroup: 10003
       containers:
         - name: portal
           # Built on the node itself (docker build -t dsh-portal:local .);
