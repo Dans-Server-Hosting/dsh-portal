@@ -7,9 +7,12 @@
 // Implements the dsh-api contract the portal codes against:
 //   GET    /api/v1/limits
 //   GET    /api/v1/servers
-//   POST   /api/v1/servers                 201 | 409 taken | 403 at cap | 422 invalid
+//   POST   /api/v1/servers                 202 provisioning (+ one-time admin_password) | 409 taken
+//                                          | 409 { detail, server } another create still provisioning
+//                                          | 403 at cap | 422 invalid
+//                                          provisioning → waking → awake by itself over MOCK_PROVISION_MS
 //   GET    /api/v1/servers/{name}
-//   POST   /api/v1/servers/{name}/wake     202
+//   POST   /api/v1/servers/{name}/wake     202 (asleep/failed/stopped → waking; otherwise a no-op)
 //   DELETE /api/v1/servers/{name}          204 | 409 players online (unless ?force=true)
 //   GET    /api/v1/me                      { username, is_admin }  (admin when the username is "admin")
 //   POST   /api/v1/feedback                201 | 422 message missing/too long | 429 more than 10 an hour
@@ -20,14 +23,21 @@
 //   POST   /userauth/login                 200 { token, tokenType, expiresAt, refreshToken } | 401
 //   GET    /userauth/session/validate      200 | 401
 //   POST   /userauth/logout                204, revokes the bearer
+//   POST   /userauth/password              { currentPassword, newPassword } → 204 and every other session
+//          (USERAUTH_CHANGE_PASSWORD_PATH)  of the account is revoked | 401 wrong current | 400 policy / same
 // and test-only controls:
-//   POST   /mock/servers/{name}/state      { state, players_online } (simulate a player joining)
+//   POST   /mock/servers/{name}/state      { state, players_online } (simulate a player joining; stops the
+//                                          automatic provisioning/wake progression for that server)
+//   POST   /mock/servers/{name}/advance    one step now: provisioning → waking → awake
 //   POST   /mock/reset
 //   POST   /mock/feedback/reset            clear feedback and the rate-limit counters only
 import http from "node:http";
 
 const PORT = Number(process.env.MOCK_PORT || 4000);
 const WAKE_MS = Number(process.env.MOCK_WAKE_MS || 3000);
+// A fresh server spends half of this provisioning and half waking before it is awake.
+const PROVISION_MS = Number(process.env.MOCK_PROVISION_MS || 6000);
+const CHANGE_PASSWORD_PATH = process.env.USERAUTH_CHANGE_PASSWORD_PATH?.trim() || "/password";
 const NAME_RE = /^[a-z][a-z0-9-]{1,30}$/;
 const ADMIN_USERNAME = "admin";
 const FEEDBACK_MAX_LENGTH = 4000;
@@ -159,17 +169,53 @@ function readJson(req) {
   });
 }
 
-function scheduleWake(server) {
+function stopProgression(server) {
   clearTimeout(wakeTimers.get(server.name));
+  wakeTimers.delete(server.name);
+}
+
+/** provisioning → waking → awake, one step; anything else is left alone. */
+function advance(server) {
+  if (server.state === "provisioning") {
+    server.state = "waking";
+    server.last_woken = new Date().toISOString();
+  } else if (server.state === "waking") {
+    server.state = "awake";
+    server.players_online = 0;
+  }
+}
+
+function scheduleWake(server) {
+  stopProgression(server);
   wakeTimers.set(
     server.name,
     setTimeout(() => {
-      if (server.state === "waking") {
-        server.state = "awake";
-        server.players_online = 0;
-      }
+      if (server.state === "waking") advance(server);
     }, WAKE_MS),
   );
+}
+
+function scheduleProvisioning(server) {
+  stopProgression(server);
+  wakeTimers.set(
+    server.name,
+    setTimeout(() => {
+      if (server.state !== "provisioning") return;
+      advance(server);
+      wakeTimers.set(
+        server.name,
+        setTimeout(() => {
+          if (server.state === "waking") advance(server);
+        }, PROVISION_MS / 2),
+      );
+    }, PROVISION_MS / 2),
+  );
+}
+
+function revokeOtherSessions(username, keepToken) {
+  for (const [token, session] of sessions) {
+    if (token !== keepToken && session.username.toLowerCase() === username.toLowerCase()) sessions.delete(token);
+  }
 }
 
 async function handle(req, res) {
@@ -219,6 +265,22 @@ async function handle(req, res) {
     sessions.delete(token);
     return send(res, 204);
   }
+  if (pathname === `/userauth${CHANGE_PASSWORD_PATH}` && method === "POST") {
+    const session = sessionOf(req);
+    if (!session) return send(res, 401, { message: "invalid or expired token" });
+    const body = await readJson(req);
+    if (!body || typeof body.currentPassword !== "string" || typeof body.newPassword !== "string") {
+      return send(res, 400, { message: "currentPassword and newPassword are required" });
+    }
+    const user = users.get(session.username.toLowerCase());
+    if (!user || user.password !== body.currentPassword) return send(res, 401, { message: "current password is incorrect" });
+    const problem = passwordProblem(body.newPassword);
+    if (problem) return send(res, 400, { message: problem });
+    if (body.newPassword === body.currentPassword) return send(res, 400, { message: "new password must be different from the current password" });
+    user.password = body.newPassword;
+    revokeOtherSessions(user.username, session.token);
+    return send(res, 204);
+  }
 
   // ---- test-only controls ----
   if (method === "POST" && pathname === "/mock/reset") {
@@ -239,9 +301,18 @@ async function handle(req, res) {
     const server = findServer(m[1]);
     if (!server) return send(res, 404, { message: "no such server" });
     const body = await readJson(req);
+    stopProgression(server);
     if (body?.state) server.state = body.state;
     if (body?.players_online !== undefined) server.players_online = body.players_online;
     if (body?.state === "awake" && !server.last_woken) server.last_woken = new Date().toISOString();
+    return send(res, 200, publicView(server));
+  }
+  m = /^\/mock\/servers\/([^/]+)\/advance$/.exec(pathname);
+  if (m && method === "POST") {
+    const server = findServer(m[1]);
+    if (!server) return send(res, 404, { message: "no such server" });
+    stopProgression(server);
+    advance(server);
     return send(res, 200, publicView(server));
   }
 
@@ -312,6 +383,10 @@ async function handle(req, res) {
       });
     }
     if (findServer(name)) return send(res, 409, { message: `the name '${name}' is already taken` });
+    // The slot is reserved before provisioning starts, so a second create in
+    // that window is told about the first rather than about the cap.
+    const pending = [...servers.values()].find((s) => s.state === "provisioning");
+    if (pending) return send(res, 409, { detail: "a server is already being created for this account", server: pending.name });
     if (servers.size >= LIMITS.servers_per_tenant) {
       return send(res, 403, { message: `the free tier allows ${LIMITS.servers_per_tenant} server per account` });
     }
@@ -319,7 +394,7 @@ async function handle(req, res) {
       name,
       hostname: `${name}.example.com`,
       dashboard_url: `https://${name}.example.com/dashboard`,
-      state: "asleep",
+      state: "provisioning",
       last_woken: null,
       players_online: null,
       motd: body.motd ? String(body.motd) : "A Minecraft Server",
@@ -327,7 +402,8 @@ async function handle(req, res) {
       admin_password: `mock-${Math.random().toString(36).slice(2, 10)}`,
     };
     servers.set(name, server);
-    return send(res, 201, { ...publicView(server), admin_password: server.admin_password });
+    scheduleProvisioning(server);
+    return send(res, 202, { ...publicView(server), admin_password: server.admin_password });
   }
 
   m = /^\/api\/v1\/servers\/([^/]+)(\/wake)?$/.exec(pathname);
@@ -336,8 +412,9 @@ async function handle(req, res) {
   if (!server) return send(res, 404, { message: `no server named '${m[1]}'` });
 
   if (m[2] === "/wake" && method === "POST") {
-    if (server.state === "asleep" || server.state === "failed") {
+    if (server.state === "asleep" || server.state === "failed" || server.state === "stopped") {
       server.state = "waking";
+      server.players_online = null;
       server.last_woken = new Date().toISOString();
       scheduleWake(server);
     }
@@ -349,7 +426,7 @@ async function handle(req, res) {
     if ((server.players_online ?? 0) > 0 && !force) {
       return send(res, 409, { message: `${server.players_online} player(s) are online; pass force=true to delete anyway` });
     }
-    clearTimeout(wakeTimers.get(server.name));
+    stopProgression(server);
     servers.delete(server.name);
     return send(res, 204);
   }

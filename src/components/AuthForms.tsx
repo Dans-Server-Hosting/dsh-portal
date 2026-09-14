@@ -4,17 +4,12 @@ import Link from "next/link";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import List from "@mui/material/List";
-import ListItem from "@mui/material/ListItem";
-import ListItemIcon from "@mui/material/ListItemIcon";
-import ListItemText from "@mui/material/ListItemText";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
-import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
 import { loginAction, registerAction, type AuthFormState } from "@/app/auth/actions";
 import { PASSWORD_MAX, USERNAME_MAX, passwordRules } from "@/lib/credentials";
+import PasswordRules from "./PasswordRules";
 
 const INITIAL: AuthFormState = { error: null };
 
@@ -110,16 +105,7 @@ export function RegisterForm() {
             onChange={(e) => setPassword(e.target.value)}
             inputProps={{ "data-testid": "password-input", maxLength: PASSWORD_MAX }}
           />
-          <List dense disablePadding sx={{ mt: 0.5 }} aria-label="Password rules" data-testid="password-rules">
-            {rules.map((rule) => (
-              <ListItem key={rule.label} disableGutters sx={{ py: 0 }}>
-                <ListItemIcon sx={{ minWidth: 28 }}>
-                  {rule.ok ? <CheckCircleOutlineIcon fontSize="small" color="success" /> : <RadioButtonUncheckedIcon fontSize="small" color="disabled" />}
-                </ListItemIcon>
-                <ListItemText primary={rule.label} primaryTypographyProps={{ variant: "body2", color: rule.ok ? "text.primary" : "text.secondary" }} />
-              </ListItem>
-            ))}
-          </List>
+          <PasswordRules rules={rules} />
         </Box>
         <TextField
           name="email"

@@ -6,7 +6,7 @@ import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import PowerSettingsNewIcon from "@mui/icons-material/PowerSettingsNew";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { explain, portalFetch } from "@/lib/client";
-import type { Server } from "@/lib/types";
+import { WAKEABLE_STATES, type Server } from "@/lib/types";
 import DeleteServerDialog from "./DeleteServerDialog";
 
 interface Props {
@@ -21,7 +21,7 @@ interface Props {
 export default function ServerActions({ server, onChanged, onDeleted, onError, size = "small" }: Props) {
   const [waking, setWaking] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const canWake = server.state === "asleep" || server.state === "failed";
+  const canWake = WAKEABLE_STATES.includes(server.state);
 
   async function wake() {
     setWaking(true);

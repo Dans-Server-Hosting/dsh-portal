@@ -17,6 +17,23 @@ import ServerActions from "./ServerActions";
 import ServerAddress from "./ServerAddress";
 import StatePill from "./StatePill";
 
+function describeState(server: Server): string {
+  switch (server.state) {
+    case "provisioning":
+      return "Being set up. This usually takes about a minute; the page updates by itself.";
+    case "waking":
+      return "Waking up; joinable in under a minute";
+    case "awake":
+      return `Awake${server.players_online !== null ? `, ${server.players_online} player${server.players_online === 1 ? "" : "s"} online` : ""}`;
+    case "stopped":
+      return "Stopped. The game was stopped from the dashboard or it crashed; press Wake to start it again.";
+    case "failed":
+      return "Failed to start. Try Wake again, or check the dashboard.";
+    default:
+      return "Asleep. It wakes when a player joins, or when Wake is pressed.";
+  }
+}
+
 function formatWhen(iso: string | null): string {
   if (!iso) return "never";
   const date = new Date(iso);
@@ -69,14 +86,8 @@ export default function ServerDetail({ initial }: { initial: Server }) {
               <ServerAddress hostname={server.hostname} />
             </Row>
             <Row label="State">
-              <Typography variant="body2">
-                {server.state === "awake"
-                  ? `Awake${server.players_online !== null ? `, ${server.players_online} player${server.players_online === 1 ? "" : "s"} online` : ""}`
-                  : server.state === "waking"
-                    ? "Waking up; joinable in under a minute"
-                    : server.state === "failed"
-                      ? "Failed to start. Try Wake again, or check the dashboard."
-                      : "Asleep. It wakes when a player joins, or when Wake is pressed."}
+              <Typography variant="body2" data-testid="state-description">
+                {describeState(server)}
               </Typography>
             </Row>
             <Row label="Last woken">

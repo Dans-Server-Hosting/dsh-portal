@@ -5,6 +5,7 @@ import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
 import DnsIcon from "@mui/icons-material/Dns";
+import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import { getMe } from "@/lib/me";
 import { getSession } from "@/lib/session";
 import FeedbackLink from "./FeedbackLink";
@@ -36,6 +37,9 @@ export default async function SiteHeader() {
               </Button>
             )}
             <FeedbackLink />
+            <Button component={Link} href="/account" size="small" color="inherit" startIcon={<PersonOutlineIcon />} data-testid="account-link">
+              Account
+            </Button>
             <Box component="form" action="/auth/signout" method="post" sx={{ display: "contents" }}>
               <Button type="submit" size="small" variant="outlined" color="inherit">
                 Sign out

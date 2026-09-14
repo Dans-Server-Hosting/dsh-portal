@@ -3,8 +3,16 @@ import { userAuthUrl } from "./config";
 
 /**
  * The portal's view of UserAuth, which is a plain REST API with no hosted
- * pages. Only server code talks to it, and only these four calls are used.
+ * pages. Only server code talks to it, and only these calls are used.
  */
+
+/**
+ * Where UserAuth's change-password endpoint lives. It is `POST /password` by
+ * default; USERAUTH_CHANGE_PASSWORD_PATH overrides it (for example
+ * `/password/change`) so the portal need not be rebuilt if the path settles
+ * differently. The mock reads the same variable.
+ */
+export const USERAUTH_CHANGE_PASSWORD_PATH = process.env.USERAUTH_CHANGE_PASSWORD_PATH?.trim() || "/password";
 export class UserAuthError extends Error {
   constructor(
     public readonly status: number,
@@ -20,6 +28,11 @@ export interface LoginResponse {
   tokenType: string;
   expiresAt: string;
   refreshToken?: string;
+}
+
+export interface ValidateResponse {
+  valid: boolean;
+  username: string;
 }
 
 export interface RegisterResponse {
@@ -60,6 +73,15 @@ export const userAuth = {
       method: "POST",
       body: JSON.stringify(email ? { username, password, email } : { username, password }),
     }),
+  /** 200 while the token is live and unrevoked; 401 otherwise. */
+  validate: (token: string) => call<ValidateResponse>("/session/validate", { token }),
+  /**
+   * 204 on success (UserAuth signs every other session of the account out);
+   * 401 when `currentPassword` is wrong; 400 with a message when the new
+   * password breaks the policy or equals the current one.
+   */
+  changePassword: (token: string, currentPassword: string, newPassword: string) =>
+    call<void>(USERAUTH_CHANGE_PASSWORD_PATH, { method: "POST", token, body: JSON.stringify({ currentPassword, newPassword }) }),
   /** Best effort: a failure here must not stop the cookie being cleared. */
   logout: async (token: string): Promise<void> => {
     try {

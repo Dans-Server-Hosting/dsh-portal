@@ -2,6 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { ApiError } from "./api";
 import { getSession } from "./session";
+import type { ApiErrorBody } from "./types";
 
 /**
  * Shared plumbing for the portal's own /api/servers* route handlers: the
@@ -21,7 +22,9 @@ export async function withSession<T>(
     return NextResponse.json(result, { status: successStatus });
   } catch (error) {
     if (error instanceof ApiError) {
-      return NextResponse.json({ message: error.message }, { status: error.status });
+      const body: ApiErrorBody = { message: error.message };
+      if (error.server) body.server = error.server;
+      return NextResponse.json(body, { status: error.status });
     }
     console.error(error);
     return NextResponse.json({ message: "The hosting API could not be reached." }, { status: 502 });

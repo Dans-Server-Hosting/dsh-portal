@@ -5,6 +5,8 @@ export class PortalError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    /** Set on the create endpoint's 409 when another create is still in progress. */
+    public readonly server?: string,
   ) {
     super(message);
     this.name = "PortalError";
@@ -36,28 +38,35 @@ export async function portalFetch<T>(path: string, init: RequestInit = {}): Prom
     // no body
   }
   if (!response.ok) {
-    const message =
-      body && typeof body === "object" && typeof (body as { message?: unknown }).message === "string"
-        ? (body as { message: string }).message
-        : `Request failed (${response.status})`;
-    throw new PortalError(response.status, message);
+    const fields = body && typeof body === "object" ? (body as { message?: unknown; server?: unknown }) : {};
+    const message = typeof fields.message === "string" ? fields.message : `Request failed (${response.status})`;
+    throw new PortalError(response.status, message, typeof fields.server === "string" ? fields.server : undefined);
   }
   return body as T;
 }
 
 /** Turns an API failure into a sentence a person can act on. */
-export function explain(error: unknown, context: "create" | "delete" | "wake" | "load" | "feedback" | "feedback-status"): string {
+export function explain(
+  error: unknown,
+  context: "create" | "delete" | "wake" | "load" | "feedback" | "feedback-status" | "password",
+): string {
   if (error instanceof PortalError) {
     switch (error.status) {
+      case 400:
+        return error.message;
       case 403:
         return context === "create"
           ? "Your account is at its server limit. Delete a server before creating another."
-          : "You do not have permission to do that.";
+          : context === "password"
+            ? "That is not your current password."
+            : "You do not have permission to do that.";
       case 404:
         return context === "feedback-status" ? "That feedback no longer exists." : "That server no longer exists.";
       case 409:
         return context === "create"
-          ? "That name is already taken. Pick another."
+          ? error.server
+            ? "A server is already being created for your account."
+            : "That name is already taken. Pick another."
           : context === "delete"
             ? "Players are online right now. Tick the box to delete anyway."
             : error.message;
@@ -66,7 +75,9 @@ export function explain(error: unknown, context: "create" | "delete" | "wake" | 
       case 429:
         return "You have sent a lot of feedback in the last hour. Thank you; please try again later.";
       case 502:
-        return "The hosting service is not reachable right now. Try again in a moment.";
+        return context === "password"
+          ? "The sign-in service is not reachable right now. Try again in a moment."
+          : "The hosting service is not reachable right now. Try again in a moment.";
       default:
         return error.message;
     }
@@ -75,3 +86,5 @@ export function explain(error: unknown, context: "create" | "delete" | "wake" | 
 }
 
 export const POLL_INTERVAL_MS = 10_000;
+/** A server that was just created is watched more closely than the list. */
+export const CREATE_POLL_INTERVAL_MS = 5_000;

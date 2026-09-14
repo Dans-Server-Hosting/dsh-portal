@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import Alert from "@mui/material/Alert";
 import AlertTitle from "@mui/material/AlertTitle";
@@ -7,11 +7,13 @@ import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
+import LinearProgress from "@mui/material/LinearProgress";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import { explain, portalFetch } from "@/lib/client";
-import { serverNameProblem, type CreatedServer, type CreateServerRequest } from "@/lib/types";
+import { explain, PortalError, portalFetch } from "@/lib/client";
+import { serverNameProblem, type CreatedServer, type CreateServerRequest, type Server } from "@/lib/types";
+import CreateProgress from "./CreateProgress";
 import ServerAddress from "./ServerAddress";
 
 export default function NewServerForm() {
@@ -21,7 +23,11 @@ export default function NewServerForm() {
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Set from the API's 409 when another server of this account is still being created. */
+  const [inProgress, setInProgress] = useState<string | null>(null);
   const [created, setCreated] = useState<CreatedServer | null>(null);
+  const [online, setOnline] = useState(false);
+  const onProgress = useCallback((server: Server) => setOnline(server.state === "awake"), []);
 
   const nameProblem = name ? serverNameProblem(name) : "A name is required.";
 
@@ -31,12 +37,15 @@ export default function NewServerForm() {
     if (nameProblem) return;
     setBusy(true);
     setError(null);
+    setInProgress(null);
     const body: CreateServerRequest = { name: name.trim() };
     if (motd.trim()) body.motd = motd.trim();
     if (operator.trim()) body.operator_username = operator.trim();
     try {
+      // 202: the server exists in state `provisioning`; the created view watches it from here.
       setCreated(await portalFetch<CreatedServer>("/api/servers", { method: "POST", body: JSON.stringify(body) }));
     } catch (e) {
+      if (e instanceof PortalError && e.status === 409 && e.server) setInProgress(e.server);
       setError(explain(e, "create"));
     } finally {
       setBusy(false);
@@ -46,14 +55,21 @@ export default function NewServerForm() {
   if (created) {
     return (
       <Stack spacing={2} data-testid="created">
-        <Alert severity="success">
-          <AlertTitle>{created.name} is ready</AlertTitle>
-          Give your friends this address. The server is asleep until the first player joins, then it takes under a
-          minute to wake.
+        <Alert severity="success" data-testid="created-banner">
+          <AlertTitle>{online ? `${created.name} is ready` : `${created.name} is being set up`}</AlertTitle>
+          {online
+            ? "Give your friends this address; they can join right now."
+            : "Give your friends this address. It works as soon as the server is online, which usually takes about a minute; there is no need to stay on this page."}
         </Alert>
         <Card>
           <CardContent>
             <Stack spacing={2}>
+              <Box>
+                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                  Status
+                </Typography>
+                <CreateProgress initial={created} onChange={onProgress} />
+              </Box>
               <Box>
                 <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
                   Address
@@ -122,9 +138,26 @@ export default function NewServerForm() {
           disabled={busy}
         />
         {error && (
-          <Alert severity="error" data-testid="create-error">
+          <Alert severity={inProgress ? "info" : "error"} data-testid="create-error">
             {error}
+            {inProgress && (
+              <>
+                {" "}
+                <Link href={`/servers/${encodeURIComponent(inProgress)}`} data-testid="in-progress-link">
+                  See how {inProgress} is doing
+                </Link>
+                .
+              </>
+            )}
           </Alert>
+        )}
+        {busy && (
+          <Box data-testid="create-progress" role="status" aria-live="polite">
+            <LinearProgress sx={{ mb: 1 }} />
+            <Typography variant="body2" color="text.secondary">
+              Creating your server. This usually takes about a minute; please leave this page open.
+            </Typography>
+          </Box>
         )}
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
           <Button type="submit" variant="contained" disabled={busy} data-testid="create-submit">

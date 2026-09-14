@@ -14,8 +14,9 @@
 | Route | Shows |
 |---|---|
 | `/` | what the free tier is (limits from `GET /api/v1/limits`), how sleeping works, "Sign in" / "Create account" |
-| `/servers` | the signed-in user's servers: name, address to copy, state pill (asleep / waking / awake), "Open dashboard", "Wake", "Delete" |
-| `/servers/new` | name, MOTD, your Minecraft username (becomes operator) → create |
+| `/servers` | the signed-in user's servers: name, address to copy, state pill (provisioning / asleep / waking / awake / stopped / failed), "Open dashboard", "Wake", "Delete" |
+| `/servers/new` | name, MOTD, your Minecraft username (becomes operator) → create; the API answers 202 straight away and the page shows the address with a live status until the server is online; a second create while one is pending says so and links to it |
+| `/account` | who is signed in; change password (current, new, confirm, the same live rules as registration) through UserAuth |
 | `/servers/[name]` | one server: address, state, last woken, dashboard link, delete with confirmation |
 | `/auth/login`, `/auth/register` | the portal's own forms over UserAuth's REST API |
 | `/feedback` | a Feedback link on every signed-in page opens a textarea; the message and the page it was about go to `POST /api/v1/feedback` |
@@ -29,6 +30,8 @@
 4. [x] Works at phone width. *(400 px screenshots are taken on every test run and checked for horizontal overflow.)*
 5. [x] Playwright smoke test covers create → see → delete against a mocked `dsh-api`.
 6. [x] A signed-in user can send feedback from any page and an admin can read it in the portal and mark it read. *(Covered by the smoke test at both viewports.)*
+7. [x] Creating a server cannot be submitted twice during the provisioning window, and the page shows progress until the server is online. *(The button is disabled while the request is in flight; the API's 202 is followed by a status line polled every 5 s; its 409 for a pending create is shown with a link rather than the cap message. Covered at both viewports.)*
+8. [x] A signed-in user can change their password from the portal. *(`/account`, over UserAuth's change-password endpoint; wrong current password, weak new password and success with sign-in afterwards are covered at both viewports.)*
 
 ## Not in the MVP
 
@@ -38,5 +41,5 @@
 
 ## Depends on
 
-- `dsh-api` MVP.
-- UserAuth reachable in-cluster with registration open to the public.
+- `dsh-api` MVP, with the asynchronous create (202 + `provisioning`, 409 for a concurrent create).
+- UserAuth reachable in-cluster with registration open to the public, and its change-password endpoint (`POST /password` unless `USERAUTH_CHANGE_PASSWORD_PATH` says otherwise).
