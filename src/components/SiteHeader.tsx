@@ -9,6 +9,7 @@ import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import { getMe } from "@/lib/me";
 import { getSession } from "@/lib/session";
 import FeedbackLink from "./FeedbackLink";
+import ThemeToggle from "./ThemeToggle";
 
 export default async function SiteHeader() {
   const session = await getSession();
@@ -51,6 +52,7 @@ export default async function SiteHeader() {
             Sign in
           </Button>
         )}
+        <ThemeToggle />
       </Toolbar>
     </AppBar>
   );

@@ -3,8 +3,10 @@ import Box from "@mui/material/Box";
 import Container from "@mui/material/Container";
 import Typography from "@mui/material/Typography";
 import Link from "@mui/material/Link";
+import InitColorSchemeScript from "@mui/material/InitColorSchemeScript";
 import ThemeRegistry from "@/components/ThemeRegistry";
 import SiteHeader from "@/components/SiteHeader";
+import { DEFAULT_MODE } from "@/lib/color-mode";
 
 export const metadata: Metadata = {
   title: { default: "Dan's Server Hosting", template: "%s · Dan's Server Hosting" },
@@ -19,8 +21,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    // suppressHydrationWarning: InitColorSchemeScript sets data-dark / data-light
+    // on <html> before React hydrates, so the attribute differs from the SSR markup.
+    <html lang="en" suppressHydrationWarning>
       <body>
+        <InitColorSchemeScript attribute="data" defaultMode={DEFAULT_MODE} />
         <ThemeRegistry>
           <Box sx={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
             <SiteHeader />

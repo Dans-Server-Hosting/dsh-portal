@@ -14,6 +14,11 @@ running in the cluster.
 ## What it is
 
 - Next.js (App Router) + MUI, TypeScript. Same stack as preponderous.org.
+- Dark by default, with a sun/moon toggle at the right of the header. The
+  choice is kept in the browser (`localStorage`, key `mui-mode`) and applied
+  by an inline script before the first paint, so there is no flash of the
+  other mode on the next visit. Both palettes live in `src/theme.ts`; the
+  default mode is one constant in `src/lib/color-mode.ts`.
 - Talks only to `dsh-api`. Holds no cluster credentials and no database.
 - UserAuth is a plain REST API with no hosted pages, so the portal has its
   own sign-in and registration forms. Their server actions call UserAuth's
