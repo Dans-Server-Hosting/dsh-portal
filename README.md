@@ -69,11 +69,11 @@ running in the cluster.
 
 | Route | Shows |
 |---|---|
-| `/` | the free tier (limits fetched live from `GET /api/v1/limits`), how sleeping works, Sign in |
+| `/` | the free tier (limits fetched live from `GET /api/v1/limits`), what comes installed (`GET /api/v1/default-plugins`: name, version, description, link to the project), how sleeping works, Sign in |
 | `/servers` | the signed-in user's servers: name, address to copy, state pill, Open dashboard, Wake, Delete |
-| `/servers/new` | name, MOTD, Minecraft username (becomes operator) → create (202); address + one-time password with a live status until online; 403/409/422 shown in plain language, "already being created" links to the pending server |
+| `/servers/new` | name, MOTD, Minecraft username (becomes operator); a line naming the plugins it comes with → create (202); address + one-time password with a live status until online; 403/409/422 shown in plain language, "already being created" links to the pending server |
 | `/account` | who is signed in, and a change-password form (current, new, confirm, live rules) → UserAuth via `POST /api/account/password` |
-| `/servers/[name]` | one server: address, state, last woken, dashboard link, delete with typed confirmation |
+| `/servers/[name]` | one server: address, state, last woken, dashboard link, the plugins installed by default, delete with typed confirmation |
 | `/feedback` | a textarea with a counter → `POST /api/v1/feedback` with `page` = where the user came from; thanks on success |
 | `/admin/feedback` | admins only: feedback newest first, New / Read / All filter, Mark read / Mark new; "not found" for everyone else |
 | `/auth/login` | username + password → UserAuth `POST /login`; a 401 is shown plainly |

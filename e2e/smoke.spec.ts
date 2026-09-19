@@ -17,6 +17,12 @@ test("create → see → delete", async ({ page, context }, testInfo) => {
   await expect(limits).toContainText("3 GB heap");
   await expect(limits).toContainText("1 server");
   await expect(page.getByText("After 20 minutes with nobody online")).toBeVisible();
+  // the default plugins come from the API too, in install order, linking to their project pages
+  const plugins = page.getByTestId("default-plugins");
+  await expect(plugins.getByRole("heading", { level: 3 })).toHaveText(["Dan's Plugin Manager", "ViaVersion", "ViaBackwards"]);
+  await expect(plugins).toContainText("5.12.0");
+  await expect(plugins).toContainText("older Minecraft versions");
+  await expect(plugins.getByRole("link", { name: "ViaVersion" })).toHaveAttribute("href", "https://github.com/ViaVersion/ViaVersion");
   await expect(page.getByTestId("sign-in")).toHaveAttribute("href", "/auth/login");
   await snapshot(page, testInfo, "landing");
 
@@ -48,6 +54,9 @@ test("create → see → delete", async ({ page, context }, testInfo) => {
   // ---- create ----
   await page.getByTestId("create-server-link").click();
   await expect(page).toHaveURL(/\/servers\/new$/);
+  await expect(page.getByTestId("default-plugins-note")).toHaveText(
+    "It comes with Dan's Plugin Manager, ViaVersion and ViaBackwards installed.",
+  );
   await snapshot(page, testInfo, "servers-new");
 
   await page.getByTestId("name-input").fill("Bad Name!");
@@ -73,6 +82,7 @@ test("create → see → delete", async ({ page, context }, testInfo) => {
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(SERVER);
   await expect(page.getByTestId("state-pill")).toHaveAttribute("data-state", "asleep");
   await expect(page.getByTestId("last-woken")).toHaveText("never");
+  await expect(page.getByTestId("default-plugins").getByRole("listitem")).toHaveCount(3);
   await expect(page.getByTestId("server-address")).toHaveText(`${SERVER}.example.com`);
   await expect(page.getByRole("link", { name: /dashboard/i }).first()).toHaveAttribute("href", `https://${SERVER}.example.com/dashboard`);
   await snapshot(page, testInfo, "server-detail");
