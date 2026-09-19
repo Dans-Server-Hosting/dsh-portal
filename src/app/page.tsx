@@ -9,7 +9,8 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { api } from "@/lib/api";
 import { getSession } from "@/lib/session";
-import type { Limits } from "@/lib/types";
+import type { DefaultPlugin, Limits } from "@/lib/types";
+import { DefaultPluginCards } from "@/components/DefaultPlugins";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,15 @@ async function loadLimits(): Promise<Limits | null> {
     return await api.limits();
   } catch (error) {
     console.error("limits unavailable", error);
+    return null;
+  }
+}
+
+async function loadDefaultPlugins(): Promise<DefaultPlugin[] | null> {
+  try {
+    return await api.defaultPlugins();
+  } catch (error) {
+    console.error("default plugins unavailable", error);
     return null;
   }
 }
@@ -40,7 +50,7 @@ function Fact({ value, label }: { value: string; label: string }) {
 }
 
 export default async function LandingPage() {
-  const [limits, session] = await Promise.all([loadLimits(), getSession()]);
+  const [limits, plugins, session] = await Promise.all([loadLimits(), loadDefaultPlugins(), getSession()]);
   const perTenant = limits?.servers_per_tenant ?? 1;
 
   return (
@@ -86,6 +96,22 @@ export default async function LandingPage() {
           </Grid>
         ) : (
           <Alert severity="warning">The current limits could not be loaded. Try again in a moment.</Alert>
+        )}
+      </Box>
+
+      <Box component="section" aria-labelledby="plugins-heading">
+        <Typography variant="h2" component="h2" id="plugins-heading" gutterBottom>
+          What comes installed
+        </Typography>
+        <Typography color="text.secondary" sx={{ mb: 2 }}>
+          Every new server starts with these plugins. Anything else is yours to add from the dashboard.
+        </Typography>
+        {plugins && plugins.length > 0 ? (
+          <DefaultPluginCards plugins={plugins} />
+        ) : plugins ? (
+          <Typography color="text.secondary">A plain Minecraft server, with no plugins preinstalled.</Typography>
+        ) : (
+          <Alert severity="warning">The list of preinstalled plugins could not be loaded. Try again in a moment.</Alert>
         )}
       </Box>
 

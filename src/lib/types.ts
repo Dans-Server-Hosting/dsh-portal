@@ -23,6 +23,17 @@ export interface Limits {
   minecraft_version: string;
 }
 
+// Exactly what dsh-api's GET /api/v1/default-plugins returns: the plugins
+// every new server is installed with, in install order. `description` is
+// empty and `project_url` null for a plugin the API does not know.
+export interface DefaultPlugin {
+  name: string;
+  version: string;
+  description: string;
+  download_url: string;
+  project_url: string | null;
+}
+
 export interface Server {
   name: string;
   hostname: string;

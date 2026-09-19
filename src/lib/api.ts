@@ -1,6 +1,17 @@
 import "server-only";
 import { apiBaseUrl } from "./config";
-import type { CreatedServer, CreateServerRequest, Feedback, FeedbackFilter, FeedbackRequest, FeedbackStatus, Limits, Me, Server } from "./types";
+import type {
+  CreatedServer,
+  CreateServerRequest,
+  DefaultPlugin,
+  Feedback,
+  FeedbackFilter,
+  FeedbackRequest,
+  FeedbackStatus,
+  Limits,
+  Me,
+  Server,
+} from "./types";
 
 /**
  * An error response from dsh-api, with the upstream status preserved. The
@@ -48,6 +59,7 @@ async function call<T>(path: string, init: RequestInit & { token?: string | null
 
 export const api = {
   limits: () => call<Limits>("/api/v1/limits"),
+  defaultPlugins: () => call<DefaultPlugin[]>("/api/v1/default-plugins"),
   listServers: (token: string) => call<Server[]>("/api/v1/servers", { token }),
   getServer: (token: string, name: string) => call<Server>(`/api/v1/servers/${encodeURIComponent(name)}`, { token }),
   /** 202 with the server in state `provisioning`; GET reports the progress from there. */

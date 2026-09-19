@@ -6,6 +6,7 @@
 //
 // Implements the dsh-api contract the portal codes against:
 //   GET    /api/v1/limits
+//   GET    /api/v1/default-plugins
 //   GET    /api/v1/servers
 //   POST   /api/v1/servers                 202 provisioning (+ one-time admin_password) | 409 taken
 //                                          | 409 { detail, server } another create still provisioning
@@ -56,6 +57,32 @@ const LIMITS = {
   backup_retention_days: 14,
   minecraft_version: "26.2",
 };
+
+// What dsh-api derives from DSH_DEFAULT_PLUGINS, in install order.
+const DEFAULT_PLUGINS = [
+  {
+    name: "Dan's Plugin Manager",
+    version: "0.7.0-SNAPSHOT-8-8-2026",
+    description: "Installs and updates plugins from Dan's Plugins in-game with /dpm.",
+    download_url:
+      "https://github.com/Dans-Plugins/Dans-Plugin-Manager/releases/download/v0.7.0-SNAPSHOT-8-8-2026/DansPluginManager-0.7.0-SNAPSHOT-8-8-2026.jar",
+    project_url: "https://github.com/Dans-Plugins/Dans-Plugin-Manager",
+  },
+  {
+    name: "ViaVersion",
+    version: "5.12.0",
+    description: "Lets players on newer Minecraft versions join your server.",
+    download_url: "https://github.com/ViaVersion/ViaVersion/releases/download/5.12.0/ViaVersion-5.12.0.jar",
+    project_url: "https://github.com/ViaVersion/ViaVersion",
+  },
+  {
+    name: "ViaBackwards",
+    version: "5.12.0",
+    description: "Lets players on older Minecraft versions join your server.",
+    download_url: "https://github.com/ViaVersion/ViaBackwards/releases/download/5.12.0/ViaBackwards-5.12.0.jar",
+    project_url: "https://github.com/ViaVersion/ViaBackwards",
+  },
+];
 
 /** @type {Map<string, Map<string, object>>} tenant -> name -> server */
 const tenants = new Map();
@@ -318,6 +345,7 @@ async function handle(req, res) {
 
   // ---- dsh-api ----
   if (pathname === "/api/v1/limits" && method === "GET") return send(res, 200, LIMITS);
+  if (pathname === "/api/v1/default-plugins" && method === "GET") return send(res, 200, DEFAULT_PLUGINS);
 
   if (!pathname.startsWith("/api/v1/servers") && !pathname.startsWith("/api/v1/feedback") && pathname !== "/api/v1/me") {
     return send(res, 404, { message: "not found" });

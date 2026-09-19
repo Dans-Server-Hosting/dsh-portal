@@ -12,7 +12,8 @@ import Typography from "@mui/material/Typography";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { portalFetch } from "@/lib/client";
 import { usePolling } from "@/lib/usePolling";
-import type { Server } from "@/lib/types";
+import type { DefaultPlugin, Server } from "@/lib/types";
+import { DefaultPluginList } from "./DefaultPlugins";
 import ServerActions from "./ServerActions";
 import ServerAddress from "./ServerAddress";
 import StatePill from "./StatePill";
@@ -51,7 +52,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-export default function ServerDetail({ initial }: { initial: Server }) {
+export default function ServerDetail({ initial, defaultPlugins = [] }: { initial: Server; defaultPlugins?: DefaultPlugin[] }) {
   const router = useRouter();
   const load = useCallback(() => portalFetch<Server>(`/api/servers/${encodeURIComponent(initial.name)}`), [initial.name]);
   const { data: server, setData, error: pollError, updatedAt } = usePolling(load, initial);
@@ -105,6 +106,19 @@ export default function ServerDetail({ initial }: { initial: Server }) {
           </Stack>
         </CardContent>
       </Card>
+      {defaultPlugins.length > 0 && (
+        <Card>
+          <CardContent>
+            <Typography variant="subtitle2" component="h2" gutterBottom>
+              Installed by default
+            </Typography>
+            <DefaultPluginList plugins={defaultPlugins} />
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+              Every server on the service starts with these. Add or remove plugins from the dashboard.
+            </Typography>
+          </CardContent>
+        </Card>
+      )}
       <ServerActions
         server={server}
         size="medium"

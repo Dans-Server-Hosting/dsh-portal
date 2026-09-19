@@ -18,8 +18,9 @@ export default async function ServerPage({ params }: Props) {
   const session = await requireSession();
   const { name } = await params;
   try {
-    const server = await api.getServer(session.token, name);
-    return <ServerDetail initial={server} />;
+    // The plugin list is decoration: the page must not fail because it did.
+    const [server, plugins] = await Promise.all([api.getServer(session.token, name), api.defaultPlugins().catch(() => [])]);
+    return <ServerDetail initial={server} defaultPlugins={plugins} />;
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) notFound();
     const message = error instanceof ApiError ? error.message : "The hosting service is not reachable right now.";
