@@ -114,8 +114,11 @@ It also has test-only controls: `POST /mock/reset`,
 `POST /mock/feedback/reset`, `POST /mock/servers/{name}/state` with
 `{ "state": "awake", "players_online": 1 }` to simulate a player joining (or
 `"stopped"`, or anything else; it also stops the automatic progression for
-that server), and `POST /mock/servers/{name}/advance` to move a server one
-step along provisioning → waking → awake right away.
+that server), `POST /mock/servers/{name}/advance` to move a server one
+step along provisioning → waking → awake right away, and
+`POST /mock/servers/{name}/cluster-error` with `{ "detail": "..." }` to make
+wake and delete on that server answer `502 { "detail" }` the way `dsh-api`
+does when a cluster operation fails (`{ "detail": null }` clears it).
 
 Nothing is seeded: create an account on `/auth/register` (any username of
 3-50 characters and a password with a lower- and uppercase letter, a digit
@@ -128,7 +131,7 @@ username `admin` as an administrator; every other account is a normal user.
 npm run lint
 npm run typecheck
 npm run build
-npm test            # Playwright: register → sign in → create (202 → provisioning → online, 409 while pending, provisioning/stopped pills) → see → delete, feedback → admin, change password, desktop + 400px phone
+npm test            # Playwright: register → sign in → create (202 → provisioning → online, 409 while pending, provisioning/stopped pills) → see → delete, a 502 from the API, feedback → admin, change password, desktop + 400px phone
 ```
 
 `npm test` starts the mock (with `MOCK_PROVISION_MS` set high, so the tests

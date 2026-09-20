@@ -30,6 +30,9 @@
 //   POST   /mock/servers/{name}/state      { state, players_online } (simulate a player joining; stops the
 //                                          automatic provisioning/wake progression for that server)
 //   POST   /mock/servers/{name}/advance    one step now: provisioning → waking → awake
+//   POST   /mock/servers/{name}/cluster-error  { detail } makes wake and delete on that server answer
+//                                          502 { detail } (what dsh-api's ClusterError handler sends) until
+//                                          { detail: null } or a reset
 //   POST   /mock/reset
 //   POST   /mock/feedback/reset            clear feedback and the rate-limit counters only
 import http from "node:http";
@@ -87,6 +90,8 @@ const DEFAULT_PLUGINS = [
 /** @type {Map<string, Map<string, object>>} tenant -> name -> server */
 const tenants = new Map();
 const wakeTimers = new Map();
+/** @type {Map<string, string>} name -> the 502 detail wake and delete answer with (test-only) */
+const clusterErrors = new Map();
 /** @type {Map<string, {id: number, username: string, password: string, email: string|null, createdAt: string}>} lowercased username -> user */
 const users = new Map();
 /** @type {Map<string, {username: string, issuedAt: string, expiresAt: string}>} token -> session */
@@ -316,6 +321,7 @@ async function handle(req, res) {
     sessions.clear();
     for (const t of wakeTimers.values()) clearTimeout(t);
     wakeTimers.clear();
+    clusterErrors.clear();
     resetFeedback();
     return send(res, 204);
   }
@@ -341,6 +347,15 @@ async function handle(req, res) {
     stopProgression(server);
     advance(server);
     return send(res, 200, publicView(server));
+  }
+  m = /^\/mock\/servers\/([^/]+)\/cluster-error$/.exec(pathname);
+  if (m && method === "POST") {
+    const server = findServer(m[1]);
+    if (!server) return send(res, 404, { message: "no such server" });
+    const body = await readJson(req);
+    if (body && typeof body.detail === "string") clusterErrors.set(server.name, body.detail);
+    else clusterErrors.delete(server.name);
+    return send(res, 204);
   }
 
   // ---- dsh-api ----
@@ -438,6 +453,12 @@ async function handle(req, res) {
   if (!m) return send(res, 404, { message: "not found" });
   const server = servers.get(m[1]);
   if (!server) return send(res, 404, { message: `no server named '${m[1]}'` });
+
+  // dsh-api answers a failed cluster operation with 502 and a detail that is
+  // written to be shown to the user; this is that answer, for wake and delete.
+  if (clusterErrors.has(server.name) && ((m[2] === "/wake" && method === "POST") || (!m[2] && method === "DELETE"))) {
+    return send(res, 502, { detail: clusterErrors.get(server.name) });
+  }
 
   if (m[2] === "/wake" && method === "POST") {
     if (server.state === "asleep" || server.state === "failed" || server.state === "stopped") {
