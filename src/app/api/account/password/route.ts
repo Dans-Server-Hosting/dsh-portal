@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
       if (error.status < 500) return NextResponse.json({ message: error.message }, { status: error.status });
     }
     console.error("change password failed", error);
-    return NextResponse.json({ message: "The sign-in service could not be reached." }, { status: 502 });
+    // Shown as is by the form, so it is the whole sentence.
+    return NextResponse.json({ message: "The sign-in service is not reachable right now. Try again in a moment." }, { status: 502 });
   }
 }

@@ -74,11 +74,11 @@ export function explain(
         return context === "feedback" ? `That could not be sent: ${error.message}` : `That name is not allowed: ${error.message}`;
       case 429:
         return "You have sent a lot of feedback in the last hour. Thank you; please try again later.";
-      case 502:
-        return context === "password"
-          ? "The sign-in service is not reachable right now. Try again in a moment."
-          : "The hosting service is not reachable right now. Try again in a moment.";
       default:
+        // A 502 carries a sentence that is meant to be shown: dsh-api's own
+        // detail when a cluster operation failed (retrying would fail the
+        // same way), or the route handler's "not reachable" when the fetch
+        // never got a response.
         return error.message;
     }
   }
