@@ -69,6 +69,16 @@ export async function setMockState(name: string, state: string, playersOnline: n
   expect(response.ok).toBeTruthy();
 }
 
+/** Makes the mock answer wake and delete on a server with 502 { detail } (null clears it). */
+export async function setMockClusterError(name: string, detail: string | null) {
+  const response = await fetch(`${MOCK_URL}/mock/servers/${name}/cluster-error`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ detail }),
+  });
+  expect(response.ok).toBeTruthy();
+}
+
 /** Creates a server straight at the mock API; it comes back 202 in state `provisioning`. */
 export async function createAtMock(token: string, name: string) {
   const response = await fetch(`${MOCK_URL}/api/v1/servers`, {

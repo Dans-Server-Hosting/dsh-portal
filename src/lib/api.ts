@@ -13,11 +13,17 @@ import type {
   Server,
 } from "./types";
 
+/** What the user is told when dsh-api gave no answer; a 502 with a detail is not that. */
+export const NOT_REACHABLE = "The hosting service is not reachable right now. Try again in a moment.";
+
 /**
  * An error response from dsh-api, with the upstream status preserved. The
  * body's `detail` (FastAPI's key) or `message` becomes the message; a
  * `server` field, which the create endpoint adds to its "already being
  * created" 409, is carried along so the client can link to that server.
+ * A 502 from dsh-api itself carries a detail that is safe to show (its
+ * ClusterError handler); a gateway answer with no JSON body — an ingress
+ * standing in for an API that is down — is reported as "not reachable".
  */
 export class ApiError extends Error {
   constructor(
@@ -30,8 +36,10 @@ export class ApiError extends Error {
   }
 }
 
+const GATEWAY_STATUSES = [502, 503, 504];
+
 async function errorFrom(response: Response): Promise<ApiError> {
-  let message = response.statusText || `dsh-api returned ${response.status}`;
+  let message: string | undefined;
   let server: string | undefined;
   try {
     const body = await response.json();
@@ -40,6 +48,11 @@ async function errorFrom(response: Response): Promise<ApiError> {
     if (body && typeof body.server === "string") server = body.server;
   } catch {
     // no JSON body
+  }
+  if (message === undefined) {
+    message = GATEWAY_STATUSES.includes(response.status)
+      ? NOT_REACHABLE
+      : response.statusText || `dsh-api returned ${response.status}`;
   }
   return new ApiError(response.status, message, server);
 }
