@@ -39,6 +39,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   source
                 </Link>
               </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                More by Daniel Stephenson →{" "}
+                <Link href="https://danielstephenson.dev" color="inherit" data-testid="author-backlink">
+                  danielstephenson.dev
+                </Link>
+              </Typography>
             </Box>
           </Box>
         </ThemeRegistry>
