@@ -8,7 +8,8 @@ metadata:
 data:
   # dsh-api's Service listens on port 80 (targetPort 8000 in its pod).
   DSH_API_URL: http://dsh-api.dsh-api.svc.cluster.local
-  # UserAuth's REST API (POST /login, /register, /logout).
+  # UserAuth's REST API (POST /login, /register, /logout, and the change-password
+  # endpoint at USERAUTH_CHANGE_PASSWORD_PATH, default /password).
   USERAUTH_URL: http://userauth.userauth.svc.cluster.local:9998
   # Public origin, used for redirects after sign-out.
   PORTAL_URL: https://dansserverhosting.com
