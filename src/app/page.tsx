@@ -5,6 +5,7 @@ import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import Grid from "@mui/material/Grid";
+import MuiLink from "@mui/material/Link";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { api } from "@/lib/api";
@@ -107,7 +108,13 @@ export default async function LandingPage() {
           Every new server starts with these plugins. Anything else is yours to add from the dashboard.
         </Typography>
         {plugins && plugins.length > 0 ? (
-          <DefaultPluginCards plugins={plugins} />
+          <>
+            <DefaultPluginCards plugins={plugins} />
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }} data-testid="dansplugins-note">
+              Dan&apos;s Plugin Manager is from Dan&apos;s Plugins. Browse more plugins at{" "}
+              <MuiLink href="https://dansplugins.com">dansplugins.com</MuiLink>.
+            </Typography>
+          </>
         ) : plugins ? (
           <Typography color="text.secondary">A plain Minecraft server, with no plugins preinstalled.</Typography>
         ) : (
