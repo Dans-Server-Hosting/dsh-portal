@@ -103,8 +103,9 @@ npm run dev                    # terminal 2: portal on :3000
 ```
 
 The mock (`mock/server.mjs`, zero dependencies, in-memory) implements the
-`dsh-api` contract the portal codes against (servers, `/api/v1/me`, and the
-feedback endpoints with their 403 / 422 / 429 behaviours) plus UserAuth's
+`dsh-api` contract the portal codes against (`/api/v1/limits`,
+`/api/v1/default-plugins`, servers, `/api/v1/me`, and the feedback endpoints
+with their 403 / 422 / 429 behaviours) plus UserAuth's
 `/register`, `/login`, `/session/validate`, `/logout` and the change-password
 endpoint (at `USERAUTH_CHANGE_PASSWORD_PATH`, default `/password`) with the
 same status codes and password rules, under `/userauth`. A create answers 202
