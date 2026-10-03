@@ -1,8 +1,7 @@
 "use server";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { passwordProblem, usernameProblem } from "@/lib/credentials";
-import { SESSION_COOKIE, sessionCookieOptions } from "@/lib/session";
+import { setSession } from "@/lib/session";
 import { userAuth, UserAuthError } from "@/lib/userauth";
 
 export interface AuthFormState {
@@ -16,8 +15,7 @@ function field(data: FormData, name: string): string {
 
 async function startSession(username: string, password: string): Promise<void> {
   const login = await userAuth.login(username, password);
-  const store = await cookies();
-  store.set(SESSION_COOKIE, login.token, sessionCookieOptions(login.token, login.expiresAt));
+  await setSession(login.token, login.expiresAt);
 }
 
 function explainLogin(error: unknown): string {

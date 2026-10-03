@@ -1,8 +1,9 @@
 import "server-only";
 import { cookies } from "next/headers";
+import type { NextResponse } from "next/server";
 import { secureCookies } from "./config";
 
-export const SESSION_COOKIE = "dsh_session";
+const SESSION_COOKIE = "dsh_session";
 const ONE_DAY_SECONDS = 60 * 60 * 24;
 
 export interface Session {
@@ -43,7 +44,7 @@ export async function getSession(): Promise<Session | null> {
 }
 
 /** Cookie lifetime follows UserAuth's `expiresAt`, falling back to the JWT's `exp`. */
-export function sessionCookieOptions(token: string, expiresAt?: string) {
+function sessionCookieOptions(token: string, expiresAt?: string) {
   const fromResponse = expiresAt ? Math.floor(new Date(expiresAt).getTime() / 1000) : NaN;
   const exp = Number.isFinite(fromResponse) ? fromResponse : tokenExpiry(token);
   const maxAge = exp ? Math.max(0, exp - Math.floor(Date.now() / 1000)) : ONE_DAY_SECONDS;
@@ -56,7 +57,7 @@ export function sessionCookieOptions(token: string, expiresAt?: string) {
   };
 }
 
-export function clearedSessionCookieOptions() {
+function clearedSessionCookieOptions() {
   return {
     httpOnly: true,
     secure: secureCookies(),
@@ -64,4 +65,15 @@ export function clearedSessionCookieOptions() {
     path: "/",
     maxAge: 0,
   };
+}
+
+/** Stores a UserAuth token in the session cookie. For server actions and route handlers. */
+export async function setSession(token: string, expiresAt?: string): Promise<void> {
+  const store = await cookies();
+  store.set(SESSION_COOKIE, token, sessionCookieOptions(token, expiresAt));
+}
+
+/** Clears the session cookie on a response the caller is about to return. */
+export function clearSession(response: NextResponse): void {
+  response.cookies.set(SESSION_COOKIE, "", clearedSessionCookieOptions());
 }
