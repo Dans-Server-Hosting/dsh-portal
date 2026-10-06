@@ -10,6 +10,20 @@ export const SITE_NAME = "Dan's Server Hosting";
 export const SITE_DESCRIPTION =
   "A free Minecraft server for you and your friends: sign in, press Create server, get an address to hand out. It sleeps when nobody is playing and wakes when someone joins.";
 
+/**
+ * The link-preview card (og:image / twitter:image): public/og.png, a 1200x630
+ * image of the favicon, SITE_NAME, SITE_DESCRIPTION and the domain. The path is
+ * resolved against metadataBase (SITE_URL), so it is always absolute on the
+ * production origin. If the image is redrawn at another size, change these too.
+ */
+export const OG_IMAGE = {
+  url: "/og.png",
+  type: "image/png",
+  width: 1200,
+  height: 630,
+  alt: `${SITE_NAME}: ${SITE_DESCRIPTION}`,
+};
+
 /** Pages a signed-out visitor (or a crawler) can reach; the sitemap lists exactly these. */
 export const PUBLIC_PATHS = ["/", "/auth/login", "/auth/register"] as const;
 
@@ -31,7 +45,13 @@ export function publicPageMetadata(path: (typeof PUBLIC_PATHS)[number], title?: 
       url: path,
       title: shareTitle,
       description,
+      images: [OG_IMAGE],
     },
-    twitter: { card: "summary", title: shareTitle, description },
+    twitter: {
+      card: "summary_large_image",
+      title: shareTitle,
+      description,
+      images: [{ url: OG_IMAGE.url, alt: OG_IMAGE.alt }],
+    },
   };
 }
