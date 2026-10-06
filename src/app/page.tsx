@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
@@ -12,6 +13,9 @@ import { api } from "@/lib/api";
 import { getSession } from "@/lib/session";
 import type { DefaultPlugin, Limits } from "@/lib/types";
 import { DefaultPluginCards } from "@/components/DefaultPlugins";
+import { publicPageMetadata } from "@/lib/site";
+
+export const metadata: Metadata = publicPageMetadata("/");
 
 export const dynamic = "force-dynamic";
 

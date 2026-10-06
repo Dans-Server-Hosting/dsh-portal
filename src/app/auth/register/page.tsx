@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
+import { publicPageMetadata } from "@/lib/site";
 import { redirect } from "next/navigation";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { RegisterForm } from "@/components/AuthForms";
 import { getSession } from "@/lib/session";
 
-export const metadata: Metadata = { title: "Create an account" };
+export const metadata: Metadata = publicPageMetadata("/auth/register", "Create an account", "Create a free Dan's Server Hosting account and get a Minecraft server for you and your friends.");
 export const dynamic = "force-dynamic";
 
 export default async function RegisterPage() {

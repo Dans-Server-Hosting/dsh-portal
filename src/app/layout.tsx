@@ -7,11 +7,17 @@ import InitColorSchemeScript from "@mui/material/InitColorSchemeScript";
 import ThemeRegistry from "@/components/ThemeRegistry";
 import SiteHeader from "@/components/SiteHeader";
 import { DEFAULT_MODE } from "@/lib/color-mode";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: { default: "Dan's Server Hosting", template: "%s · Dan's Server Hosting" },
-  description: "Sign in, press Create server, get an address to give your friends, see when it's awake.",
+  metadataBase: new URL(SITE_URL),
+  title: { default: SITE_NAME, template: `%s · ${SITE_NAME}` },
+  description: SITE_DESCRIPTION,
   icons: { icon: "/favicon.svg" },
+  // Pages without their own (the signed-in ones) still share as the site; no
+  // og:url here, since a child would otherwise inherit "/" as its URL.
+  openGraph: { type: "website", siteName: SITE_NAME, locale: "en_US", title: SITE_NAME, description: SITE_DESCRIPTION },
+  twitter: { card: "summary", title: SITE_NAME, description: SITE_DESCRIPTION },
 };
 
 export const viewport: Viewport = {
