@@ -79,6 +79,14 @@ running in the cluster.
 | `/auth/login` | username + password → UserAuth `POST /login`; a 401 is shown plainly |
 | `/auth/register` | username, password (rules hinted as you type), optional email → `POST /register`, then signed in |
 | `/auth/signout` (POST) | revokes the token at UserAuth and clears the cookie |
+| `/robots.txt`, `/sitemap.xml` | generated from `src/app/robots.ts` and `src/app/sitemap.ts`: the signed-in pages and `/api/` are disallowed, and the sitemap lists the public pages (`/`, `/auth/login`, `/auth/register`) |
+
+The public pages carry a canonical link, a description, and Open Graph /
+Twitter (`summary`) tags, all built in `src/lib/site.ts`. Their absolute URLs
+come from the constant `SITE_URL` (`https://dansserverhosting.com`), never from
+`PORTAL_URL` or the request, so a local or test build cannot emit localhost
+links. There is no `og:image` yet: the only image in the repo is the SVG
+favicon, which link previews do not render.
 
 ## Configuration
 
