@@ -121,7 +121,10 @@ endpoint (at `USERAUTH_CHANGE_PASSWORD_PATH`, default `/password`) with the
 same status codes and password rules, under `/userauth`. A create answers 202
 in state `provisioning` and moves to `waking` and then `awake` by itself over
 `MOCK_PROVISION_MS` (default 6 s); a second create in that window is the 409.
-It also has test-only controls: `POST /mock/reset`,
+Wake moves an asleep, stopped or failed server to `waking` and then `awake`
+after `MOCK_WAKE_MS` (default 3 s). The mock listens on `127.0.0.1` at
+`MOCK_PORT` (default 4000); if it is moved, change `DSH_API_URL` and
+`USERAUTH_URL` in `.env.local` to match. It also has test-only controls: `POST /mock/reset`,
 `POST /mock/feedback/reset`, `POST /mock/servers/{name}/state` with
 `{ "state": "awake", "players_online": 1 }` to simulate a player joining (or
 `"stopped"`, or anything else; it also stops the automatic progression for
