@@ -88,7 +88,7 @@ test("create → see → delete", async ({ page, context }, testInfo) => {
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(SERVER);
   await expect(page.getByTestId("state-pill")).toHaveAttribute("data-state", "asleep");
   await expect(page.getByTestId("last-woken")).toHaveText("never");
-  await expect(page.getByTestId("default-plugins").getByRole("listitem")).toHaveCount(3);
+  await expect(page.getByTestId("installed-plugin")).toHaveCount(3);
   await expect(page.getByTestId("server-address")).toHaveText(`${SERVER}.example.com`);
   await expect(page.getByRole("link", { name: /dashboard/i }).first()).toHaveAttribute("href", `https://${SERVER}.example.com/dashboard`);
   await snapshot(page, testInfo, "server-detail");

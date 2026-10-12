@@ -65,6 +65,67 @@ export interface ApiErrorBody {
    * provisioning: the name of the server being created.
    */
   server?: string;
+  /** On a 409 from POST .../plugins/apply: how many players a restart would disconnect. */
+  players_online?: number;
+}
+
+// ---- Plugin selection (RFC 0020) ----
+
+// Exactly what dsh-api's GET /api/v1/catalog returns, one per installable
+// plugin, sorted by title. `requires` are slugs installed alongside it.
+export interface CatalogPlugin {
+  slug: string;
+  title: string;
+  description: string;
+  tags: string[];
+  requires: string[];
+  version: string;
+  icon_url: string | null;
+  project_url: string | null;
+}
+
+/**
+ * `installed`: on disk since the last start. `pending`: waits for the next
+ * start. `failed…`: the last start could not install it (the text says why).
+ */
+export type PluginStatus = "installed" | "pending" | string;
+
+export interface ServerPlugin {
+  slug: string;
+  title: string;
+  version: string;
+  /** "default" (came with the server), "tenant" (chosen) or "dependency" (installed for another plugin). */
+  added_by: "default" | "tenant" | "dependency" | string;
+  requires: string[];
+  /** Selected plugins that need this one; while any do, it cannot be removed. */
+  required_by: string[];
+  status: PluginStatus;
+}
+
+// GET /api/v1/servers/{name}/plugins. `pending` is true while the selection
+// differs from what the server last started with.
+export interface ServerPlugins {
+  server: string;
+  state: ServerState;
+  players_online: number | null;
+  pending: boolean;
+  plugins: ServerPlugin[];
+}
+
+/** PUT .../plugins/{slug}: everything newly selected, the plugin first. */
+export interface AddedPlugins extends ServerPlugins {
+  added: string[];
+}
+
+/** DELETE .../plugins/{slug}: dependencies nothing needs any more, offered for removal. */
+export interface RemovedPlugin extends ServerPlugins {
+  removed: string;
+  unused_dependencies: string[];
+}
+
+/** POST .../plugins/apply (202). */
+export interface ApplyResult {
+  applies: "next_start" | "restarting";
 }
 
 /** What the portal accepts from its own change-password form. */

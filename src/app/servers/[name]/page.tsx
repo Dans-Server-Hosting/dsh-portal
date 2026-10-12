@@ -18,9 +18,15 @@ export default async function ServerPage({ params }: Props) {
   const session = await requireSession();
   const { name } = await params;
   try {
-    // The plugin list is decoration: the page must not fail because it did.
-    const [server, plugins] = await Promise.all([api.getServer(session.token, name), api.defaultPlugins().catch(() => [])]);
-    return <ServerDetail initial={server} defaultPlugins={plugins} />;
+    // The plugin lists are decoration: the page must not fail because they
+    // did. The selection answers 503 while dsh-api has plugin selection
+    // switched off, and the page then shows the default plugins instead.
+    const [server, defaults, selection] = await Promise.all([
+      api.getServer(session.token, name),
+      api.defaultPlugins().catch(() => []),
+      api.serverPlugins(session.token, name).catch(() => null),
+    ]);
+    return <ServerDetail initial={server} defaultPlugins={defaults} plugins={selection} />;
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) notFound();
     const message = error instanceof ApiError ? error.message : "The hosting service is not reachable right now.";

@@ -66,6 +66,20 @@ running in the cluster.
   per item (`PATCH /api/v1/feedback/{id}` through the proxy). Anyone else
   gets the ordinary "not found" page there; the API enforces the same rule
   with a 403, which the proxy passes through.
+- **Plugins** on the server page (RFC 0020, dsh-api `/api/v1/servers/{name}/plugins`):
+  the installed plugins with a Remove button each (disabled, with "Needed by
+  Fiefs", while another plugin requires it), and **Add plugins**, which opens
+  the Dan's Plugins catalog (`GET /api/v1/catalog`, through the portal's own
+  `/api/catalog`) as a bottom sheet on phones and a dialog on wider screens:
+  icon, title, version, description, tags, "Also installs Medieval Factions"
+  and an Install button, with a search box. Removing says the plugin's data
+  is kept, and when a removal leaves an automatically added dependency
+  unused the portal offers to remove it too (never unasked). While a change
+  waits for the next start a banner says so: an asleep server applies it at
+  its next wake; an awake one has **Restart to apply**, which asks "N players
+  are online. Restart now?" first when anyone is on. While dsh-api has
+  `DSH_PLUGIN_SELECTION` off (the plugin endpoints answer 503) the page shows
+  the default plugins as before.
 
 | Route | Shows |
 |---|---|
@@ -73,7 +87,7 @@ running in the cluster.
 | `/servers` | the signed-in user's servers: name, address to copy, state pill, Open dashboard, Wake, Delete |
 | `/servers/new` | name, MOTD, Minecraft username (becomes operator); a line naming the plugins it comes with → create (202); address + one-time password with a live status until online; 403/409/422 shown in plain language, "already being created" links to the pending server |
 | `/account` | who is signed in, and a change-password form (current, new, confirm, live rules) → UserAuth via `POST /api/account/password` |
-| `/servers/[name]` | one server: address, state, last woken, dashboard link, the plugins installed by default, delete with typed confirmation |
+| `/servers/[name]` | one server: address, state, last woken, dashboard link, its plugins (install from the catalog, remove, restart to apply; the default plugins while selection is off), delete with typed confirmation |
 | `/feedback` | a textarea with a counter → `POST /api/v1/feedback` with `page` = where the user came from; thanks on success |
 | `/admin/feedback` | admins only: feedback newest first, New / Read / All filter, Mark read / Mark new; "not found" for everyone else |
 | `/auth/login` | username + password → UserAuth `POST /login`; a 401 is shown plainly |
@@ -114,8 +128,11 @@ npm run dev                    # terminal 2: portal on :3000
 
 The mock (`mock/server.mjs`, zero dependencies, in-memory) implements the
 `dsh-api` contract the portal codes against (`/api/v1/limits`,
-`/api/v1/default-plugins`, servers, `/api/v1/me`, and the feedback endpoints
-with their 403 / 422 / 429 behaviours) plus UserAuth's
+`/api/v1/default-plugins`, servers, `/api/v1/me`, the feedback endpoints
+with their 403 / 422 / 429 behaviours, and plugin selection: `/api/v1/catalog`
+and the per-server plugin endpoints, with a small catalog in which Fiefs and
+Currencies require Medieval Factions; `POST /mock/plugins` with
+`{ "enabled": false }` switches selection off, as `DSH_PLUGIN_SELECTION` does) plus UserAuth's
 `/register`, `/login`, `/session/validate`, `/logout` and the change-password
 endpoint (at `USERAUTH_CHANGE_PASSWORD_PATH`, default `/password`) with the
 same status codes and password rules, under `/userauth`. A create answers 202

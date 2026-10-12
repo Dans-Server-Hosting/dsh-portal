@@ -27,6 +27,7 @@ export async function withSession<T>(
     if (error instanceof ApiError) {
       const body: ApiErrorBody = { message: error.message };
       if (error.server) body.server = error.server;
+      if (error.playersOnline !== undefined) body.players_online = error.playersOnline;
       return NextResponse.json(body, { status: error.status });
     }
     console.error(error);
