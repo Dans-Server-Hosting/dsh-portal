@@ -1,6 +1,9 @@
 import "server-only";
 import { apiBaseUrl } from "./config";
 import type {
+  AddedPlugins,
+  ApplyResult,
+  CatalogPlugin,
   CreatedServer,
   CreateServerRequest,
   DefaultPlugin,
@@ -10,7 +13,9 @@ import type {
   FeedbackStatus,
   Limits,
   Me,
+  RemovedPlugin,
   Server,
+  ServerPlugins,
 } from "./types";
 
 /** What the user is told when dsh-api gave no answer; a 502 with a detail is not that. */
@@ -30,6 +35,8 @@ export class ApiError extends Error {
     public readonly status: number,
     message: string,
     public readonly server?: string,
+    /** Set on the plugin apply endpoint's 409: the players a restart would disconnect. */
+    public readonly playersOnline?: number,
   ) {
     super(message);
     this.name = "ApiError";
@@ -41,11 +48,13 @@ const GATEWAY_STATUSES = [502, 503, 504];
 async function errorFrom(response: Response): Promise<ApiError> {
   let message: string | undefined;
   let server: string | undefined;
+  let playersOnline: number | undefined;
   try {
     const body = await response.json();
     if (body && typeof body.detail === "string") message = body.detail;
     else if (body && typeof body.message === "string") message = body.message;
     if (body && typeof body.server === "string") server = body.server;
+    if (body && typeof body.players_online === "number") playersOnline = body.players_online;
   } catch {
     // no JSON body
   }
@@ -54,7 +63,7 @@ async function errorFrom(response: Response): Promise<ApiError> {
       ? NOT_REACHABLE
       : response.statusText || `dsh-api returned ${response.status}`;
   }
-  return new ApiError(response.status, message, server);
+  return new ApiError(response.status, message, server, playersOnline);
 }
 
 async function call<T>(path: string, init: RequestInit & { token?: string | null } = {}): Promise<T> {
@@ -82,6 +91,26 @@ export const api = {
     call<Server>(`/api/v1/servers/${encodeURIComponent(name)}/wake`, { token, method: "POST" }),
   deleteServer: (token: string, name: string, force: boolean) =>
     call<void>(`/api/v1/servers/${encodeURIComponent(name)}${force ? "?force=true" : ""}`, { token, method: "DELETE" }),
+  catalog: () => call<CatalogPlugin[]>("/api/v1/catalog"),
+  serverPlugins: (token: string, name: string) =>
+    call<ServerPlugins>(`/api/v1/servers/${encodeURIComponent(name)}/plugins`, { token }),
+  addPlugin: (token: string, name: string, slug: string) =>
+    call<AddedPlugins>(`/api/v1/servers/${encodeURIComponent(name)}/plugins/${encodeURIComponent(slug)}`, {
+      token,
+      method: "PUT",
+    }),
+  removePlugin: (token: string, name: string, slug: string) =>
+    call<RemovedPlugin>(`/api/v1/servers/${encodeURIComponent(name)}/plugins/${encodeURIComponent(slug)}`, {
+      token,
+      method: "DELETE",
+    }),
+  /** 202; a 409 with `players_online` means it needs `confirmPlayers`. */
+  applyPlugins: (token: string, name: string, confirmPlayers: boolean) =>
+    call<ApplyResult>(`/api/v1/servers/${encodeURIComponent(name)}/plugins/apply`, {
+      token,
+      method: "POST",
+      body: JSON.stringify({ confirm_players: confirmPlayers }),
+    }),
   me: (token: string) => call<Me>("/api/v1/me", { token }),
   submitFeedback: (token: string, body: FeedbackRequest) =>
     call<Feedback>("/api/v1/feedback", { token, method: "POST", body: JSON.stringify(body) }),

@@ -15,6 +15,16 @@
 //   GET    /api/v1/servers/{name}
 //   POST   /api/v1/servers/{name}/wake     202 (asleep/failed/stopped → waking; otherwise a no-op)
 //   DELETE /api/v1/servers/{name}          204 | 409 players online (unless ?force=true)
+//   GET    /api/v1/catalog                 the Dan's Plugins catalog (public) | 503 selection switched off
+//   GET    /api/v1/servers/{name}/plugins  { server, state, players_online, pending, plugins } | 503 switched off
+//   PUT    /api/v1/servers/{name}/plugins/{slug}     adds it and what it requires → { added, ...view }
+//                                          | 404 not in the catalog | 409 the server is being created
+//   DELETE /api/v1/servers/{name}/plugins/{slug}     → { removed, unused_dependencies, ...view }
+//                                          | 404 not installed | 409 { detail, required_by }
+//   POST   /api/v1/servers/{name}/plugins/apply      { confirm_players } → 202 { applies: next_start | restarting }
+//                                          | 409 { detail, players_online } unless confirmed | 409 busy
+//          A server "starts" with its selection on create, on wake and on a restarting apply; until
+//          then the view says pending and the new plugins' status is "pending".
 //   GET    /api/v1/me                      { username, is_admin }  (admin when the username is "admin")
 //   POST   /api/v1/feedback                201 | 422 message missing/too long | 429 more than 10 an hour
 //   GET    /api/v1/feedback?status=new|read|all   admin only (403), newest first
@@ -33,6 +43,8 @@
 //   POST   /mock/servers/{name}/cluster-error  { detail } makes wake and delete on that server answer
 //                                          502 { detail } (what dsh-api's ClusterError handler sends) until
 //                                          { detail: null } or a reset
+//   POST   /mock/plugins                   { enabled } switches plugin selection on (the default) or off,
+//                                          as DSH_PLUGIN_SELECTION does
 //   POST   /mock/reset
 //   POST   /mock/feedback/reset            clear feedback and the rate-limit counters only
 import http from "node:http";
@@ -86,6 +98,80 @@ const DEFAULT_PLUGINS = [
     project_url: "https://github.com/ViaVersion/ViaBackwards",
   },
 ];
+
+// What dsh-api's GET /api/v1/catalog returns (a few of the real entries),
+// sorted by title. Fiefs requires Medieval Factions, as on dansplugins.com.
+const DPC = "https://dansplugins.com";
+const CATALOG = [
+  {
+    slug: "currencies",
+    title: "Currencies",
+    description: "Lets factions mint their own currencies.",
+    tags: ["economy"],
+    requires: ["medieval-factions"],
+    version: "v2.1.0",
+    icon_url: null,
+    project_url: `${DPC}/resources/currencies`,
+  },
+  {
+    slug: "dans-plugin-manager",
+    title: "Dan's Plugin Manager",
+    description: "Installs and updates plugins from Dan's Plugins in-game with /dpm.",
+    tags: ["utility"],
+    requires: [],
+    version: "v0.6.0",
+    icon_url: null,
+    project_url: `${DPC}/resources/dans-plugin-manager`,
+  },
+  {
+    slug: "fiefs",
+    title: "Fiefs",
+    description: "Lets faction members claim land of their own inside their faction's territory.",
+    tags: ["factions", "land"],
+    requires: ["medieval-factions"],
+    version: "v0.13.1",
+    icon_url: null,
+    project_url: `${DPC}/resources/fiefs`,
+  },
+  {
+    slug: "medieval-factions",
+    title: "Medieval Factions",
+    description: "Factions with land claims, diplomacy, gates and duels.",
+    tags: ["factions"],
+    requires: [],
+    version: "v7.0.0",
+    icon_url: null,
+    project_url: `${DPC}/resources/medieval-factions`,
+  },
+  {
+    slug: "viabackwards",
+    title: "ViaBackwards",
+    description: "Lets players on older Minecraft versions join your server.",
+    tags: ["compatibility"],
+    requires: ["viaversion"],
+    version: "5.12.0",
+    icon_url: null,
+    project_url: "https://github.com/ViaVersion/ViaBackwards",
+  },
+  {
+    slug: "viaversion",
+    title: "ViaVersion",
+    description: "Lets players on newer Minecraft versions join your server.",
+    tags: ["compatibility"],
+    requires: [],
+    version: "5.12.0",
+    icon_url: null,
+    project_url: "https://github.com/ViaVersion/ViaVersion",
+  },
+];
+const catalogEntry = (slug) => CATALOG.find((p) => p.slug === slug);
+// A new server's selection: the default plugins, pinned to the default jars.
+const DEFAULT_SELECTION = [
+  { slug: "dans-plugin-manager", title: "Dan's Plugin Manager", version: "0.7.0-SNAPSHOT-8-8-2026", requires: [] },
+  { slug: "viaversion", title: "ViaVersion", version: "5.12.0", requires: [] },
+  { slug: "viabackwards", title: "ViaBackwards", version: "5.12.0", requires: ["viaversion"] },
+];
+let pluginSelection = process.env.MOCK_PLUGIN_SELECTION !== "false";
 
 /** @type {Map<string, Map<string, object>>} tenant -> name -> server */
 const tenants = new Map();
@@ -174,7 +260,40 @@ function publicView(server) {
   const rest = { ...server };
   delete rest.admin_password;
   delete rest.operator_username;
+  delete rest.plugins;
+  delete rest.started_with;
   return rest;
+}
+
+const selectionKey = (server) =>
+  [...server.plugins.values()]
+    .map((p) => `${p.slug}@${p.version}`)
+    .sort()
+    .join(",");
+
+/** The wrapper's boot script reconciling plugins/ against the selection. */
+function startWithSelection(server) {
+  server.started_with = new Set([...server.plugins.values()].map((p) => `${p.slug}@${p.version}`));
+}
+
+function pluginsView(server) {
+  const pending = selectionKey(server) !== [...server.started_with].sort().join(",");
+  const rows = [...server.plugins.values()].sort((a, b) => a.slug.localeCompare(b.slug));
+  return {
+    server: server.name,
+    state: server.state,
+    players_online: server.players_online,
+    pending,
+    plugins: rows.map((p) => ({
+      slug: p.slug,
+      title: p.title,
+      version: p.version,
+      added_by: p.added_by,
+      requires: p.requires,
+      required_by: rows.filter((o) => o.requires.includes(p.slug)).map((o) => o.slug).sort(),
+      status: server.started_with.has(`${p.slug}@${p.version}`) ? "installed" : "pending",
+    })),
+  };
 }
 
 function send(res, status, body, headers = {}) {
@@ -209,6 +328,7 @@ function stopProgression(server) {
 /** provisioning → waking → awake, one step; anything else is left alone. */
 function advance(server) {
   if (server.state === "provisioning") {
+    startWithSelection(server);
     server.state = "waking";
     server.last_woken = new Date().toISOString();
   } else if (server.state === "waking") {
@@ -323,6 +443,12 @@ async function handle(req, res) {
     wakeTimers.clear();
     clusterErrors.clear();
     resetFeedback();
+    pluginSelection = process.env.MOCK_PLUGIN_SELECTION !== "false";
+    return send(res, 204);
+  }
+  if (method === "POST" && pathname === "/mock/plugins") {
+    const body = await readJson(req);
+    pluginSelection = body?.enabled !== false;
     return send(res, 204);
   }
   if (method === "POST" && pathname === "/mock/feedback/reset") {
@@ -361,6 +487,10 @@ async function handle(req, res) {
   // ---- dsh-api ----
   if (pathname === "/api/v1/limits" && method === "GET") return send(res, 200, LIMITS);
   if (pathname === "/api/v1/default-plugins" && method === "GET") return send(res, 200, DEFAULT_PLUGINS);
+  if (pathname === "/api/v1/catalog" && method === "GET") {
+    if (!pluginSelection) return send(res, 503, { detail: "choosing plugins is not switched on for this service yet" });
+    return send(res, 200, CATALOG);
+  }
 
   if (!pathname.startsWith("/api/v1/servers") && !pathname.startsWith("/api/v1/feedback") && pathname !== "/api/v1/me") {
     return send(res, 404, { message: "not found" });
@@ -443,11 +573,17 @@ async function handle(req, res) {
       motd: body.motd ? String(body.motd) : "A Minecraft Server",
       operator_username: body.operator_username ? String(body.operator_username) : null,
       admin_password: `mock-${Math.random().toString(36).slice(2, 10)}`,
+      plugins: new Map(DEFAULT_SELECTION.map((p) => [p.slug, { ...p, added_by: "default" }])),
+      started_with: new Set(),
     };
+    startWithSelection(server);
     servers.set(name, server);
     scheduleProvisioning(server);
     return send(res, 202, { ...publicView(server), admin_password: server.admin_password });
   }
+
+  m = /^\/api\/v1\/servers\/([^/]+)\/plugins(?:\/([^/]+))?$/.exec(pathname);
+  if (m) return handlePlugins(req, res, servers.get(m[1]), m[2] ? decodeURIComponent(m[2]) : null);
 
   m = /^\/api\/v1\/servers\/([^/]+)(\/wake)?$/.exec(pathname);
   if (!m) return send(res, 404, { message: "not found" });
@@ -462,6 +598,7 @@ async function handle(req, res) {
 
   if (m[2] === "/wake" && method === "POST") {
     if (server.state === "asleep" || server.state === "failed" || server.state === "stopped") {
+      startWithSelection(server);
       server.state = "waking";
       server.players_online = null;
       server.last_woken = new Date().toISOString();
@@ -478,6 +615,65 @@ async function handle(req, res) {
     stopProgression(server);
     servers.delete(server.name);
     return send(res, 204);
+  }
+  return send(res, 405, { message: "method not allowed" });
+}
+
+async function handlePlugins(req, res, server, slug) {
+  const method = req.method || "GET";
+  if (!pluginSelection) return send(res, 503, { detail: "choosing plugins is not switched on for this service yet" });
+  if (!server) return send(res, 404, { detail: "no such server" });
+  if (!slug && method === "GET") return send(res, 200, pluginsView(server));
+  if (method !== "GET" && server.state === "provisioning") {
+    return send(res, 409, { detail: "the server is being created; try again once it is up" });
+  }
+
+  if (slug === "apply" && method === "POST") {
+    const body = (await readJson(req)) ?? {};
+    if (server.state === "asleep") return send(res, 202, { applies: "next_start" });
+    if (server.state !== "awake" && server.state !== "stopped") {
+      return send(res, 409, { detail: `the server is ${server.state}; try again once it is up` });
+    }
+    const online = server.state === "awake" ? (server.players_online ?? 0) : 0;
+    if (online > 0 && body.confirm_players !== true) {
+      return send(res, 409, { detail: `${online} player(s) online; confirm to restart anyway`, players_online: online });
+    }
+    // The wrapper pod is deleted; it comes back up with the new selection.
+    startWithSelection(server);
+    server.state = "waking";
+    server.players_online = null;
+    scheduleWake(server);
+    return send(res, 202, { applies: "restarting" });
+  }
+
+  if (slug && method === "PUT") {
+    if (!catalogEntry(slug)) return send(res, 404, { detail: `no plugin '${slug}' in the catalog` });
+    const added = [];
+    const queue = [[slug, "tenant"]];
+    while (queue.length > 0) {
+      const [current, addedBy] = queue.shift();
+      if (server.plugins.has(current)) continue;
+      const entry = catalogEntry(current);
+      server.plugins.set(current, { slug: current, title: entry.title, version: entry.version, requires: entry.requires, added_by: addedBy });
+      added.push(current);
+      queue.push(...entry.requires.map((dep) => [dep, "dependency"]));
+    }
+    return send(res, 200, { added, ...pluginsView(server) });
+  }
+
+  if (slug && method === "DELETE") {
+    if (!server.plugins.has(slug)) return send(res, 404, { detail: `'${slug}' is not installed on this server` });
+    const dependents = [...server.plugins.values()].filter((p) => p.requires.includes(slug)).map((p) => p.slug).sort();
+    if (dependents.length > 0) {
+      return send(res, 409, { detail: `${slug} is needed by ${dependents.join(", ")}`, required_by: dependents });
+    }
+    server.plugins.delete(slug);
+    const remaining = [...server.plugins.values()];
+    const unused = remaining
+      .filter((p) => p.added_by === "dependency" && !remaining.some((o) => o.requires.includes(p.slug)))
+      .map((p) => p.slug)
+      .sort();
+    return send(res, 200, { removed: slug, unused_dependencies: unused, ...pluginsView(server) });
   }
   return send(res, 405, { message: "method not allowed" });
 }

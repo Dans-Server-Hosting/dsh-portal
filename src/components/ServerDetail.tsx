@@ -12,8 +12,9 @@ import Typography from "@mui/material/Typography";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { portalFetch } from "@/lib/client";
 import { usePolling } from "@/lib/usePolling";
-import type { DefaultPlugin, Server } from "@/lib/types";
+import type { DefaultPlugin, Server, ServerPlugins } from "@/lib/types";
 import { DefaultPluginList } from "./DefaultPlugins";
+import PluginsSection from "./PluginsSection";
 import ServerActions from "./ServerActions";
 import ServerAddress from "./ServerAddress";
 import StatePill from "./StatePill";
@@ -52,7 +53,16 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-export default function ServerDetail({ initial, defaultPlugins = [] }: { initial: Server; defaultPlugins?: DefaultPlugin[] }) {
+export default function ServerDetail({
+  initial,
+  defaultPlugins = [],
+  plugins = null,
+}: {
+  initial: Server;
+  defaultPlugins?: DefaultPlugin[];
+  /** The server's plugin selection; null while dsh-api has plugin selection switched off. */
+  plugins?: ServerPlugins | null;
+}) {
   const router = useRouter();
   const load = useCallback(() => portalFetch<Server>(`/api/servers/${encodeURIComponent(initial.name)}`), [initial.name]);
   const { data: server, setData, error: pollError, updatedAt } = usePolling(load, initial);
@@ -106,7 +116,9 @@ export default function ServerDetail({ initial, defaultPlugins = [] }: { initial
           </Stack>
         </CardContent>
       </Card>
-      {defaultPlugins.length > 0 && (
+      {plugins ? (
+        <PluginsSection initial={plugins} />
+      ) : defaultPlugins.length > 0 && (
         <Card>
           <CardContent>
             <Typography variant="subtitle2" component="h2" gutterBottom>

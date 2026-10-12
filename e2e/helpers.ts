@@ -88,3 +88,13 @@ export async function createAtMock(token: string, name: string) {
   });
   expect(response.status).toBe(202);
 }
+
+/** Switches the mock's plugin selection on or off, as DSH_PLUGIN_SELECTION does. */
+export async function setMockPluginSelection(enabled: boolean) {
+  const response = await fetch(`${MOCK_URL}/mock/plugins`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ enabled }),
+  });
+  expect(response.ok).toBeTruthy();
+}

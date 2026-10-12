@@ -7,6 +7,8 @@ export class PortalError extends Error {
     message: string,
     /** Set on the create endpoint's 409 when another create is still in progress. */
     public readonly server?: string,
+    /** Set on the plugin apply endpoint's 409: the players a restart would disconnect. */
+    public readonly playersOnline?: number,
   ) {
     super(message);
     this.name = "PortalError";
@@ -38,9 +40,15 @@ export async function portalFetch<T>(path: string, init: RequestInit = {}): Prom
     // no body
   }
   if (!response.ok) {
-    const fields = body && typeof body === "object" ? (body as { message?: unknown; server?: unknown }) : {};
+    const fields =
+      body && typeof body === "object" ? (body as { message?: unknown; server?: unknown; players_online?: unknown }) : {};
     const message = typeof fields.message === "string" ? fields.message : `Request failed (${response.status})`;
-    throw new PortalError(response.status, message, typeof fields.server === "string" ? fields.server : undefined);
+    throw new PortalError(
+      response.status,
+      message,
+      typeof fields.server === "string" ? fields.server : undefined,
+      typeof fields.players_online === "number" ? fields.players_online : undefined,
+    );
   }
   return body as T;
 }
@@ -48,8 +56,13 @@ export async function portalFetch<T>(path: string, init: RequestInit = {}): Prom
 /** Turns an API failure into a sentence a person can act on. */
 export function explain(
   error: unknown,
-  context: "create" | "delete" | "wake" | "load" | "feedback" | "feedback-status" | "password",
+  context: "create" | "delete" | "wake" | "load" | "feedback" | "feedback-status" | "password" | "plugins",
 ): string {
+  // dsh-api's plugin answers (not installed, needed by, server busy, not
+  // switched on yet, catalog down) are each a sentence written to be shown.
+  if (error instanceof PortalError && context === "plugins" && error.status !== 401) {
+    return error.message.charAt(0).toUpperCase() + error.message.slice(1).replace(/([^.])$/, "$1.");
+  }
   if (error instanceof PortalError) {
     switch (error.status) {
       case 400:
