@@ -17,7 +17,7 @@
 | `/servers` | the signed-in user's servers: name, address to copy, state pill (provisioning / asleep / waking / awake / stopped / failed), "Open dashboard", "Wake", "Delete" |
 | `/servers/new` | name, MOTD, your Minecraft username (becomes operator), a line naming the plugins it comes with → create; the API answers 202 straight away and the page shows the address with a live status until the server is online; a second create while one is pending says so and links to it |
 | `/account` | who is signed in; change password (current, new, confirm, the same live rules as registration) through UserAuth |
-| `/servers/[name]` | one server: address, state, last woken, dashboard link, the plugins installed by default, delete with confirmation |
+| `/servers/[name]` | one server: address, state, last woken, dashboard link, its plugins (install from the Dan's Plugins catalog, remove, restart to apply; the plugins installed by default while plugin selection is off), delete with confirmation |
 | `/auth/login`, `/auth/register` | the portal's own forms over UserAuth's REST API |
 | `/feedback` | a Feedback link on every signed-in page opens a textarea; the message and the page it was about go to `POST /api/v1/feedback` |
 | `/admin/feedback` | when `GET /api/v1/me` says `is_admin`: what users sent, newest first, New / Read / All, Mark read / Mark new; "not found" for anyone else |
@@ -35,11 +35,12 @@
 
 ## Not in the MVP
 
-- Editing server settings (difficulty, plugins) — the OMCSI dashboard already does that; the portal links to it.
+- Editing server settings (difficulty and the like) — the OMCSI dashboard already does that; the portal links to it. Catalog plugins are the exception (installed and removed on the server page, RFC 0020); plugins outside the catalog are still uploaded from the dashboard.
 - Admin views beyond the feedback inbox, billing, a paid tier.
 - Public server listing / discovery.
 
 ## Depends on
 
 - `dsh-api` MVP, with the asynchronous create (202 + `provisioning`, 409 for a concurrent create) and `GET /api/v1/default-plugins`.
+- For the plugins section: `dsh-api`'s `GET /api/v1/catalog` and the per-server plugin endpoints (`/api/v1/servers/{name}/plugins`), live once `DSH_PLUGIN_SELECTION` is on; until then they answer 503 and the server page shows the default plugins.
 - UserAuth reachable in-cluster with registration open to the public, and its change-password endpoint (`POST /password` unless `USERAUTH_CHANGE_PASSWORD_PATH` says otherwise).

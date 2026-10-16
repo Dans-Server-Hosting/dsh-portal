@@ -26,7 +26,8 @@ running in the cluster.
   `httpOnly`, `Secure`, `SameSite=Lax` cookie (lifetime from `expiresAt`) and
   is only ever read by server-side code, which forwards it to `dsh-api` as a
   Bearer token. The browser never sees the token; it talks to the portal's
-  own `/api/servers*` route handlers. Sign-out revokes the token with
+  own `/api/*` route handlers (`/api/servers*`, `/api/catalog`,
+  `/api/feedback*`, `/api/account/password`). Sign-out revokes the token with
   `POST /logout` before clearing the cookie.
 - Creating a server is asynchronous: `POST /api/v1/servers` answers **202**
   with the server in state `provisioning` (and the one-time dashboard
@@ -162,7 +163,7 @@ username `admin` as an administrator; every other account is a normal user.
 npm run lint
 npm run typecheck
 npm run build
-npm test            # Playwright: register → sign in → create (202 → provisioning → online, 409 while pending, provisioning/stopped pills) → see → delete, a 502 from the API, feedback → admin, change password, desktop + 400px phone
+npm test            # Playwright: register → sign in → create (202 → provisioning → online, 409 while pending, provisioning/stopped pills) → see → delete, a 502 from the API, feedback → admin, change password, plugins (install with a dependency, remove, restart to apply, selection off), desktop + 400px phone
 ```
 
 `npm test` starts the mock (with `MOCK_PROVISION_MS` set high, so the tests
