@@ -16,6 +16,10 @@ import type {
   RemovedPlugin,
   Server,
   ServerPlugins,
+  ExportArea,
+  ExportLink,
+  WorldExport,
+  WorldExportList,
 } from "./types";
 
 /** What the user is told when dsh-api gave no answer; a 502 with a detail is not that. */
@@ -37,6 +41,8 @@ export class ApiError extends Error {
     public readonly server?: string,
     /** Set on the plugin apply endpoint's 409: the players a restart would disconnect. */
     public readonly playersOnline?: number,
+    /** Set on the export endpoint's 429: seconds until another export is allowed. */
+    public readonly retryAfter?: number,
   ) {
     super(message);
     this.name = "ApiError";
@@ -49,12 +55,19 @@ async function errorFrom(response: Response): Promise<ApiError> {
   let message: string | undefined;
   let server: string | undefined;
   let playersOnline: number | undefined;
+  let retryAfter: number | undefined;
   try {
     const body = await response.json();
     if (body && typeof body.detail === "string") message = body.detail;
     else if (body && typeof body.message === "string") message = body.message;
     if (body && typeof body.server === "string") server = body.server;
     if (body && typeof body.players_online === "number") playersOnline = body.players_online;
+    if (body && typeof body.retry_after === "number") retryAfter = body.retry_after;
+    // FastAPI's own validation errors carry a list of {msg} rather than a sentence.
+    if (message === undefined && body && Array.isArray(body.detail)) {
+      const msgs = body.detail.map((d: { msg?: unknown }) => (typeof d?.msg === "string" ? d.msg : null)).filter(Boolean);
+      if (msgs.length > 0) message = msgs.join("; ");
+    }
   } catch {
     // no JSON body
   }
@@ -63,7 +76,7 @@ async function errorFrom(response: Response): Promise<ApiError> {
       ? NOT_REACHABLE
       : response.statusText || `dsh-api returned ${response.status}`;
   }
-  return new ApiError(response.status, message, server, playersOnline);
+  return new ApiError(response.status, message, server, playersOnline, retryAfter);
 }
 
 async function call<T>(path: string, init: RequestInit & { token?: string | null } = {}): Promise<T> {
@@ -77,6 +90,18 @@ async function call<T>(path: string, init: RequestInit & { token?: string | null
   if (!response.ok) throw await errorFrom(response);
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
+}
+
+/**
+ * A preview file of an export, passed through as bytes: usd-web tiles are
+ * gzip binaries the viewer decodes itself. Returns the upstream response so
+ * the route handler can keep its status and content type.
+ */
+export async function fetchExportPreview(token: string, name: string, id: string, file: string): Promise<Response> {
+  return fetch(
+    `${apiBaseUrl()}/api/v1/servers/${encodeURIComponent(name)}/exports/${encodeURIComponent(id)}/preview/${encodeURIComponent(file)}`,
+    { headers: { authorization: `Bearer ${token}` }, cache: "no-store" },
+  );
 }
 
 export const api = {
@@ -110,6 +135,24 @@ export const api = {
       token,
       method: "POST",
       body: JSON.stringify({ confirm_players: confirmPlayers }),
+    }),
+  listExports: (token: string, name: string) =>
+    call<WorldExportList>(`/api/v1/servers/${encodeURIComponent(name)}/exports`, { token }),
+  /** 202 with the export `queued`; no area means the default box around spawn. */
+  startExport: (token: string, name: string, area: ExportArea | null) =>
+    call<WorldExport>(`/api/v1/servers/${encodeURIComponent(name)}/exports`, {
+      token,
+      method: "POST",
+      body: JSON.stringify(area ? { area } : {}),
+    }),
+  getExport: (token: string, name: string, id: string) =>
+    call<WorldExport>(`/api/v1/servers/${encodeURIComponent(name)}/exports/${encodeURIComponent(id)}`, { token }),
+  deleteExport: (token: string, name: string, id: string) =>
+    call<void>(`/api/v1/servers/${encodeURIComponent(name)}/exports/${encodeURIComponent(id)}`, { token, method: "DELETE" }),
+  exportLink: (token: string, name: string, id: string) =>
+    call<ExportLink>(`/api/v1/servers/${encodeURIComponent(name)}/exports/${encodeURIComponent(id)}/link`, {
+      token,
+      method: "POST",
     }),
   me: (token: string) => call<Me>("/api/v1/me", { token }),
   submitFeedback: (token: string, body: FeedbackRequest) =>

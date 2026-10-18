@@ -9,6 +9,8 @@ export class PortalError extends Error {
     public readonly server?: string,
     /** Set on the plugin apply endpoint's 409: the players a restart would disconnect. */
     public readonly playersOnline?: number,
+    /** Set on the export endpoint's 429: seconds until another export is allowed. */
+    public readonly retryAfter?: number,
   ) {
     super(message);
     this.name = "PortalError";
@@ -41,23 +43,49 @@ export async function portalFetch<T>(path: string, init: RequestInit = {}): Prom
   }
   if (!response.ok) {
     const fields =
-      body && typeof body === "object" ? (body as { message?: unknown; server?: unknown; players_online?: unknown }) : {};
+      body && typeof body === "object" ? (body as { message?: unknown; server?: unknown; players_online?: unknown; retry_after?: unknown }) : {};
     const message = typeof fields.message === "string" ? fields.message : `Request failed (${response.status})`;
     throw new PortalError(
       response.status,
       message,
       typeof fields.server === "string" ? fields.server : undefined,
       typeof fields.players_online === "number" ? fields.players_online : undefined,
+      typeof fields.retry_after === "number" ? fields.retry_after : undefined,
     );
   }
   return body as T;
 }
 
+function sentence(message: string): string {
+  return message.charAt(0).toUpperCase() + message.slice(1).replace(/([^.])$/, "$1.");
+}
+
+/** "3 hours", "12 minutes", "under a minute". */
+export function formatWait(seconds: number): string {
+  if (seconds < 60) return "under a minute";
+  const minutes = Math.ceil(seconds / 60);
+  if (minutes < 120) return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+  const hours = Math.round(minutes / 60);
+  return `${hours} hour${hours === 1 ? "" : "s"}`;
+}
+
 /** Turns an API failure into a sentence a person can act on. */
 export function explain(
   error: unknown,
-  context: "create" | "delete" | "wake" | "load" | "feedback" | "feedback-status" | "password" | "plugins",
+  context: "create" | "delete" | "wake" | "load" | "feedback" | "feedback-status" | "password" | "plugins" | "export",
 ): string {
+  if (error instanceof PortalError && context === "export" && error.status !== 401) {
+    if (error.status === 429) {
+      const wait = error.retryAfter;
+      return wait !== undefined
+        ? `Your account has used its exports for today. Try again in ${formatWait(wait)}.`
+        : "Your account has used its exports for today. Try again later.";
+    }
+    if (error.status === 404) return "That export no longer exists.";
+    if (error.status === 422) return `That area cannot be exported: ${sentence(error.message)}`;
+    // 409 (another export running, server busy) and 502/503 carry a sentence written to be shown.
+    return sentence(error.message);
+  }
   // dsh-api's plugin answers (not installed, needed by, server busy, not
   // switched on yet, catalog down) are each a sentence written to be shown.
   if (error instanceof PortalError && context === "plugins" && error.status !== 401) {

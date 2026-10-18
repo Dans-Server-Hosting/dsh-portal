@@ -22,6 +22,9 @@ export default defineConfig({
     baseURL: PORTAL_URL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
+    // WebGL for the 3D export preview: headless Chromium has no GPU, so it
+    // renders through SwiftShader (the same flags usd-web's own browser test uses).
+    launchOptions: { args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] },
   },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } } },
@@ -37,7 +40,7 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       // Provisioning is driven by the tests (POST /mock/servers/{name}/advance),
       // so it must not move on its own while a step is being looked at.
-      env: { MOCK_PORT: String(MOCK_PORT), MOCK_WAKE_MS: "2000", MOCK_PROVISION_MS: "600000" },
+      env: { MOCK_PORT: String(MOCK_PORT), MOCK_WAKE_MS: "2000", MOCK_PROVISION_MS: "600000", MOCK_EXPORT_MS: "3000" },
     },
     {
       // The standalone server is what the Dockerfile ships, so it is what is tested.

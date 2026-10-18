@@ -17,6 +17,8 @@ const eslintConfig = [
       "test-results/**",
       "playwright-report/**",
       "next-env.d.ts",
+      // Vendored verbatim from usd-web; linted there.
+      "src/vendor/**",
     ],
   },
 ];
