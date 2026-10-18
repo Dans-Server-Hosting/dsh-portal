@@ -21,6 +21,11 @@ export interface Limits {
   archive_after_days: number;
   backup_retention_days: number;
   minecraft_version: string;
+  // World export (RFC 0021); present whether or not the feature is switched on.
+  export_default_size?: number;
+  export_max_size?: number;
+  export_daily_limit?: number;
+  export_retention_hours?: number;
 }
 
 // Exactly what dsh-api's GET /api/v1/default-plugins returns: the plugins
@@ -67,7 +72,65 @@ export interface ApiErrorBody {
   server?: string;
   /** On a 409 from POST .../plugins/apply: how many players a restart would disconnect. */
   players_online?: number;
+  /** On a 429 from POST .../exports: seconds until another export is allowed. */
+  retry_after?: number;
 }
+
+// ---- World export as 3D (RFC 0021) ----
+
+export type ExportStatus = "queued" | "running" | "ready" | "failed";
+export type ExportPhase = "starting" | "copying" | "exporting" | "preview" | "packaging";
+/**
+ * `at_rest`: copied while the server was asleep (exact). `live_stable`: copied
+ * while it ran, and nothing changed during the copy. `live_changing`: it kept
+ * saving during the copy, so a few chunks may be missing or out of date.
+ */
+export type ExportSnapshot = "at_rest" | "live_stable" | "live_changing";
+
+/** An X/Z box in block coordinates, corners inclusive; every height is exported. */
+export interface ExportArea {
+  x1: number;
+  z1: number;
+  x2: number;
+  z2: number;
+}
+
+export interface ExportStats {
+  blocks_scanned: number;
+  instances: number;
+  zip_bytes: number;
+  preview_bytes: number;
+}
+
+export interface WorldExport {
+  id: string;
+  server: string;
+  status: ExportStatus;
+  phase: ExportPhase | null;
+  /** null until the box around spawn has been worked out. */
+  area: ExportArea | null;
+  custom_area: boolean;
+  snapshot: ExportSnapshot | null;
+  created_at: string;
+  finished_at: string | null;
+  expires_at: string | null;
+  error: string | null;
+  stats: ExportStats | null;
+}
+
+/** GET /api/v1/servers/{name}/exports, newest first. */
+export interface WorldExportList {
+  exports: WorldExport[];
+}
+
+/** POST .../exports/{id}/link: a signed download URL that needs no session. */
+export interface ExportLink {
+  url: string;
+  expires_at: string;
+}
+
+/** The usd-web files an export's preview is made of. */
+export const PREVIEW_FILE_PATTERN = /^(index\.json|t\.-?\d+\.-?\d+\.[0-9a-f]+\.uwt)$/;
 
 // ---- Plugin selection (RFC 0020) ----
 

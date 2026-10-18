@@ -98,3 +98,16 @@ export async function setMockPluginSelection(enabled: boolean) {
   });
   expect(response.ok).toBeTruthy();
 }
+
+/**
+ * Switches the mock's world export on or off, as DSH_WORLD_EXPORT does, and
+ * sets how the next exports finish ({ snapshot } or { error }).
+ */
+export async function setMockWorldExport(enabled: boolean, outcome?: { snapshot?: string; error?: string }) {
+  const response = await fetch(`${MOCK_URL}/mock/world-export`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ enabled, outcome }),
+  });
+  expect(response.ok).toBeTruthy();
+}

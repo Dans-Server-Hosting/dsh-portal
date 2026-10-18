@@ -12,12 +12,13 @@ import Typography from "@mui/material/Typography";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { portalFetch } from "@/lib/client";
 import { usePolling } from "@/lib/usePolling";
-import type { DefaultPlugin, Server, ServerPlugins } from "@/lib/types";
+import type { DefaultPlugin, Limits, Server, ServerPlugins, WorldExport } from "@/lib/types";
 import { DefaultPluginList } from "./DefaultPlugins";
 import PluginsSection from "./PluginsSection";
 import ServerActions from "./ServerActions";
 import ServerAddress from "./ServerAddress";
 import StatePill from "./StatePill";
+import WorldExportSection from "./WorldExportSection";
 
 function describeState(server: Server): string {
   switch (server.state) {
@@ -57,11 +58,16 @@ export default function ServerDetail({
   initial,
   defaultPlugins = [],
   plugins = null,
+  exports = null,
+  limits = null,
 }: {
   initial: Server;
   defaultPlugins?: DefaultPlugin[];
   /** The server's plugin selection; null while dsh-api has plugin selection switched off. */
   plugins?: ServerPlugins | null;
+  /** The server's world exports; null while dsh-api has world export switched off (RFC 0021). */
+  exports?: WorldExport[] | null;
+  limits?: Limits | null;
 }) {
   const router = useRouter();
   const load = useCallback(() => portalFetch<Server>(`/api/servers/${encodeURIComponent(initial.name)}`), [initial.name]);
@@ -131,6 +137,7 @@ export default function ServerDetail({
           </CardContent>
         </Card>
       )}
+      {exports && <WorldExportSection server={server.name} initial={exports} limits={limits} />}
       <ServerActions
         server={server}
         size="medium"

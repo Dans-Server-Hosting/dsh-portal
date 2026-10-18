@@ -21,12 +21,16 @@ export default async function ServerPage({ params }: Props) {
     // The plugin lists are decoration: the page must not fail because they
     // did. The selection answers 503 while dsh-api has plugin selection
     // switched off, and the page then shows the default plugins instead.
-    const [server, defaults, selection] = await Promise.all([
+    // World exports likewise answer 503 while world export is switched off
+    // (RFC 0021); the section is then not shown at all.
+    const [server, defaults, selection, exports, limits] = await Promise.all([
       api.getServer(session.token, name),
       api.defaultPlugins().catch(() => []),
       api.serverPlugins(session.token, name).catch(() => null),
+      api.listExports(session.token, name).then((r) => r.exports).catch(() => null),
+      api.limits().catch(() => null),
     ]);
-    return <ServerDetail initial={server} defaultPlugins={defaults} plugins={selection} />;
+    return <ServerDetail initial={server} defaultPlugins={defaults} plugins={selection} exports={exports} limits={limits} />;
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) notFound();
     const message = error instanceof ApiError ? error.message : "The hosting service is not reachable right now.";

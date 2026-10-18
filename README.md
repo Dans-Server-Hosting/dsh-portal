@@ -81,6 +81,24 @@ running in the cluster.
   are online. Restart now?" first when anyone is on. While dsh-api has
   `DSH_PLUGIN_SELECTION` off (the plugin endpoints answer 503) the page shows
   the default plugins as before.
+- **3D export** on the server page (RFC 0021, dsh-api
+  `/api/v1/servers/{name}/exports`): **Export world as 3D** turns a box of the
+  world (256 × 256 blocks around spawn by default, or two corners typed under
+  **Choose area**, up to the API's `export_max_size`) into an OpenUSD zip. The
+  export's progress (Queued → Copying world → Building 3D → Ready, or Failed
+  with the reason) refreshes every 5 seconds while it runs. A ready export
+  shows its box, block count, zip size, how long it is kept, and whether the
+  copy was exact (taken while asleep) or taken while the server ran — with a
+  warning when the server kept saving during the copy. **Preview** opens the
+  [usd-web](https://github.com/Preponderous-Software/usd-web) three.js viewer
+  over the export's preview tiles (full screen on phones; drag to turn, pinch
+  to zoom, two fingers to move). The viewer is vendored unmodified in
+  `src/vendor/usd-web/` at v0.1.0 with its MIT licence, with `three` pinned to
+  the version it pins (0.160.0); both load only when Preview is pressed.
+  **Download (.zip)** asks for a short-lived signed link and follows it, so the
+  file comes straight from the API. The daily limit (429) is shown with the
+  time to wait. While dsh-api has `DSH_WORLD_EXPORT` off (503) the section is
+  not shown at all.
 
 | Route | Shows |
 |---|---|
@@ -88,12 +106,13 @@ running in the cluster.
 | `/servers` | the signed-in user's servers: name, address to copy, state pill, Open dashboard, Wake, Delete |
 | `/servers/new` | name, MOTD, Minecraft username (becomes operator); a line naming the plugins it comes with → create (202); address + one-time password with a live status until online; 403/409/422 shown in plain language, "already being created" links to the pending server |
 | `/account` | who is signed in, and a change-password form (current, new, confirm, live rules) → UserAuth via `POST /api/account/password` |
-| `/servers/[name]` | one server: address, state, last woken, dashboard link, its plugins (install from the catalog, remove, restart to apply; the default plugins while selection is off), delete with typed confirmation |
+| `/servers/[name]` | one server: address, state, last woken, dashboard link, its plugins (install from the catalog, remove, restart to apply; the default plugins while selection is off), 3D export (while dsh-api has it on), delete with typed confirmation |
 | `/feedback` | a textarea with a counter → `POST /api/v1/feedback` with `page` = where the user came from; thanks on success |
 | `/admin/feedback` | admins only: feedback newest first, New / Read / All filter, Mark read / Mark new; "not found" for everyone else |
 | `/auth/login` | username + password → UserAuth `POST /login`; a 401 is shown plainly |
 | `/auth/register` | username, password (rules hinted as you type), optional email → `POST /register`, then signed in |
 | `/auth/signout` (POST) | revokes the token at UserAuth and clears the cookie |
+| `/api/servers/[name]/exports…` | the world-export proxies: list/start, one/delete, `link`, and `preview/[file]`, which passes usd-web's `index.json` and `*.uwt` tiles through as bytes (any other file name is a 404) |
 | `/robots.txt`, `/sitemap.xml` | generated from `src/app/robots.ts` and `src/app/sitemap.ts`: the signed-in pages and `/api/` are disallowed, and the sitemap lists the public pages (`/`, `/auth/login`, `/auth/register`) |
 
 The public pages carry a canonical link, a description, and Open Graph /
@@ -146,7 +165,18 @@ after `MOCK_WAKE_MS` (default 3 s). The mock listens on `127.0.0.1` at
 mock is started with `MOCK_PLUGIN_SELECTION=false`, in which case the plugin
 endpoints answer 503 and the server page shows the default plugins;
 `POST /mock/plugins` switches it while running, and `POST /mock/reset` puts it
-back to what `MOCK_PLUGIN_SELECTION` says. The mock also has test-only controls: `POST /mock/reset`,
+back to what `MOCK_PLUGIN_SELECTION` says. World export is **off** unless the
+mock is started with `MOCK_WORLD_EXPORT=1` (its endpoints answer 503 and the
+server page has no 3D export section); `POST /mock/world-export` with
+`{ "enabled": true }` switches it while running, and an optional
+`"outcome": { "snapshot": "live_changing" }` or `{ "error": "..." }` sets how
+the next exports finish. An export moves from `queued` through the copying,
+exporting and packaging phases to `ready` over `MOCK_EXPORT_MS` (default 3 s);
+its preview serves a real usd-web tile set committed in
+`mock/fixtures/world-export/preview/` (exported from Minecraft-USD-Exporter's
+26.3 fixture world), the link endpoint returns a `/mock/download/{token}` URL
+that serves a small zip without a session, and the sixth export in a day is
+the 429. The mock also has test-only controls: `POST /mock/reset`,
 `POST /mock/feedback/reset`, `POST /mock/servers/{name}/state` with
 `{ "state": "awake", "players_online": 1 }` to simulate a player joining (or
 `"stopped"`, or anything else; it also stops the automatic progression for

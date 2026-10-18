@@ -25,6 +25,17 @@
 //                                          | 409 { detail, players_online } unless confirmed | 409 busy
 //          A server "starts" with its selection on create, on wake and on a restarting apply; until
 //          then the view says pending and the new plugins' status is "pending".
+//   GET    /api/v1/servers/{name}/exports  { exports } newest first | 503 world export switched off (RFC 0021)
+//   POST   /api/v1/servers/{name}/exports  { area? } → 202 queued, then running (copying → exporting →
+//                                          packaging) → ready over MOCK_EXPORT_MS | 409 one already running
+//                                          | 409 the server is being created | 422 area over 512 × 512
+//                                          | 429 { detail, retry_after } after 5 in a day
+//   GET    /api/v1/servers/{name}/exports/{id}            one export
+//   DELETE /api/v1/servers/{name}/exports/{id}            204 | 409 while queued/running
+//   GET    /api/v1/servers/{name}/exports/{id}/preview/{file}  a real usd-web tile set (mock/fixtures/
+//                                          world-export/preview, from the exporter's 26.3 fixture world)
+//   POST   /api/v1/servers/{name}/exports/{id}/link       { url, expires_at } → GET /mock/download/{token}
+//                                          serves a small zip with no session, as the signed link does
 //   GET    /api/v1/me                      { username, is_admin }  (admin when the username is "admin")
 //   POST   /api/v1/feedback                201 | 422 message missing/too long | 429 more than 10 an hour
 //   GET    /api/v1/feedback?status=new|read|all   admin only (403), newest first
@@ -46,9 +57,16 @@
 //   POST   /mock/plugins                   { enabled } switches plugin selection on (the default) or off,
 //                                          as DSH_PLUGIN_SELECTION does; it starts off when
 //                                          MOCK_PLUGIN_SELECTION=false
-//   POST   /mock/reset                     also restores plugin selection to MOCK_PLUGIN_SELECTION
+//   POST   /mock/world-export              { enabled, outcome? } switches world export on or off, as
+//                                          DSH_WORLD_EXPORT does (off unless MOCK_WORLD_EXPORT=1), and sets
+//                                          how the next exports finish: { snapshot } or { error }
+//   POST   /mock/reset                     also restores plugin selection to MOCK_PLUGIN_SELECTION and
+//                                          world export to MOCK_WORLD_EXPORT
 //   POST   /mock/feedback/reset            clear feedback and the rate-limit counters only
 import http from "node:http";
+import { readFileSync, readdirSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const PORT = Number(process.env.MOCK_PORT || 4000);
 const WAKE_MS = Number(process.env.MOCK_WAKE_MS || 3000);
@@ -72,7 +90,30 @@ const LIMITS = {
   archive_after_days: 60,
   backup_retention_days: 14,
   minecraft_version: "26.2",
+  export_default_size: 256,
+  export_max_size: 512,
+  export_daily_limit: 5,
+  export_retention_hours: 72,
 };
+
+// ---- World export (RFC 0021) ----
+const EXPORT_MS = Number(process.env.MOCK_EXPORT_MS || 3000);
+const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "world-export");
+const PREVIEW_FILES = new Map(
+  readdirSync(path.join(FIXTURES, "preview")).map((f) => [f, readFileSync(path.join(FIXTURES, "preview", f))]),
+);
+const EXPORT_ZIP = readFileSync(path.join(FIXTURES, "world.zip"));
+const PREVIEW_FILE_RE = /^(index\.json|t\.-?\d+\.-?\d+\.[0-9a-f]+\.uwt)$/;
+let worldExport = process.env.MOCK_WORLD_EXPORT === "1";
+/** How the next exports finish: { snapshot } or { error }. */
+let exportOutcome = { snapshot: "at_rest" };
+/** @type {Map<string, object[]>} server -> exports, newest first */
+const exportsByServer = new Map();
+/** @type {Map<string, number[]>} tenant -> start times, for the daily limit */
+const exportStarts = new Map();
+const exportTimers = new Set();
+/** @type {Map<string, {server: string, id: string}>} download token -> export */
+const downloadTokens = new Map();
 
 // What dsh-api derives from DSH_DEFAULT_PLUGINS, in install order.
 const DEFAULT_PLUGINS = [
@@ -445,7 +486,30 @@ async function handle(req, res) {
     clusterErrors.clear();
     resetFeedback();
     pluginSelection = process.env.MOCK_PLUGIN_SELECTION !== "false";
+    worldExport = process.env.MOCK_WORLD_EXPORT === "1";
+    exportOutcome = { snapshot: "at_rest" };
+    for (const t of exportTimers) clearTimeout(t);
+    exportTimers.clear();
+    exportsByServer.clear();
+    exportStarts.clear();
+    downloadTokens.clear();
     return send(res, 204);
+  }
+  if (method === "POST" && pathname === "/mock/world-export") {
+    const body = (await readJson(req)) ?? {};
+    if (typeof body.enabled === "boolean") worldExport = body.enabled;
+    if (body.outcome && typeof body.outcome === "object") exportOutcome = body.outcome;
+    return send(res, 204);
+  }
+  const dl = /^\/mock\/download\/([A-Za-z0-9_-]+)$/.exec(pathname);
+  if (dl && method === "GET") {
+    const target = downloadTokens.get(dl[1]);
+    if (!target) return send(res, 404, { detail: "not found" });
+    res.writeHead(200, {
+      "content-type": "application/zip",
+      "content-disposition": `attachment; filename="${target.server}-world-${target.id}.zip"`,
+    });
+    return res.end(EXPORT_ZIP);
   }
   if (method === "POST" && pathname === "/mock/plugins") {
     const body = await readJson(req);
@@ -583,6 +647,9 @@ async function handle(req, res) {
     return send(res, 202, { ...publicView(server), admin_password: server.admin_password });
   }
 
+  m = /^\/api\/v1\/servers\/([^/]+)\/exports(?:\/([^/]+)(?:\/(link|preview\/[^/]+))?)?$/.exec(pathname);
+  if (m) return handleExports(req, res, tenant, servers.get(m[1]), m[2] ?? null, m[3] ?? null);
+
   m = /^\/api\/v1\/servers\/([^/]+)\/plugins(?:\/([^/]+))?$/.exec(pathname);
   if (m) return handlePlugins(req, res, servers.get(m[1]), m[2] ? decodeURIComponent(m[2]) : null);
 
@@ -675,6 +742,120 @@ async function handlePlugins(req, res, server, slug) {
       .map((p) => p.slug)
       .sort();
     return send(res, 200, { removed: slug, unused_dependencies: unused, ...pluginsView(server) });
+  }
+  return send(res, 405, { message: "method not allowed" });
+}
+
+function scheduleExportStep(item, delay, step) {
+  const timer = setTimeout(() => {
+    exportTimers.delete(timer);
+    step(item);
+  }, delay);
+  exportTimers.add(timer);
+}
+
+/** queued → copying → exporting → packaging → ready (or failed), spread over EXPORT_MS. */
+function runExport(item) {
+  const slice = EXPORT_MS / 4;
+  scheduleExportStep(item, slice, (e) => Object.assign(e, { status: "running", phase: "copying" }));
+  scheduleExportStep(item, 2 * slice, (e) => Object.assign(e, { phase: "exporting" }));
+  scheduleExportStep(item, 3 * slice, (e) => Object.assign(e, { phase: "packaging" }));
+  const outcome = { ...exportOutcome };
+  scheduleExportStep(item, EXPORT_MS, (e) => {
+    const finished = new Date();
+    if (outcome.error) {
+      Object.assign(e, { status: "failed", phase: null, error: outcome.error, finished_at: finished.toISOString() });
+      return;
+    }
+    Object.assign(e, {
+      status: "ready",
+      phase: null,
+      area: e.area ?? { x1: -128, z1: -128, x2: 127, z2: 127 },
+      snapshot: outcome.snapshot ?? "at_rest",
+      finished_at: finished.toISOString(),
+      expires_at: new Date(finished.getTime() + LIMITS.export_retention_hours * HOUR_MS).toISOString(),
+      stats: { blocks_scanned: 25165824, instances: 1069183, zip_bytes: 9123456, preview_bytes: 412345 },
+    });
+  });
+}
+
+async function handleExports(req, res, tenant, server, id, sub) {
+  const method = req.method || "GET";
+  if (!worldExport) return send(res, 503, { detail: "world export is not enabled" });
+  if (!server) return send(res, 404, { detail: "no such server" });
+  const list = exportsByServer.get(server.name) ?? [];
+  exportsByServer.set(server.name, list);
+
+  if (!id && method === "GET") return send(res, 200, { exports: list });
+  if (!id && method === "POST") {
+    const body = (await readJson(req)) ?? {};
+    if (server.state === "provisioning" || server.state === "failed") {
+      return send(res, 409, { detail: `the server is ${server.state}; try again once it is up` });
+    }
+    if (list.some((e) => e.status === "queued" || e.status === "running")) {
+      return send(res, 409, { detail: "an export of this server is already running" });
+    }
+    let area = null;
+    if (body.area) {
+      const { x1, z1, x2, z2 } = body.area;
+      if (![x1, z1, x2, z2].every(Number.isInteger)) return send(res, 422, { detail: "area corners must be whole numbers" });
+      if (Math.abs(x2 - x1) + 1 > LIMITS.export_max_size || Math.abs(z2 - z1) + 1 > LIMITS.export_max_size) {
+        return send(res, 422, { detail: `the area can be at most ${LIMITS.export_max_size} x ${LIMITS.export_max_size} blocks` });
+      }
+      area = { x1: Math.min(x1, x2), z1: Math.min(z1, z2), x2: Math.max(x1, x2), z2: Math.max(z1, z2) };
+    }
+    const now = Date.now();
+    const starts = (exportStarts.get(tenant) ?? []).filter((t) => now - t < 24 * HOUR_MS);
+    if (starts.length >= LIMITS.export_daily_limit) {
+      const retryAfter = Math.ceil((starts[0] + 24 * HOUR_MS - now) / 1000);
+      return send(res, 429, { detail: `at most ${LIMITS.export_daily_limit} exports a day`, retry_after: retryAfter });
+    }
+    exportStarts.set(tenant, [...starts, now]);
+    const item = {
+      id: Math.random().toString(16).slice(2, 14).padEnd(12, "0"),
+      server: server.name,
+      status: "queued",
+      phase: null,
+      area,
+      custom_area: area !== null,
+      snapshot: null,
+      created_at: new Date(now).toISOString(),
+      finished_at: null,
+      expires_at: null,
+      error: null,
+      stats: null,
+    };
+    list.unshift(item);
+    runExport(item);
+    return send(res, 202, item);
+  }
+
+  const item = list.find((e) => e.id === id);
+  if (!item) return send(res, 404, { detail: "no such export" });
+  if (!sub && method === "GET") return send(res, 200, item);
+  if (!sub && method === "DELETE") {
+    if (item.status === "queued" || item.status === "running") {
+      return send(res, 409, { detail: "the export is still running; delete it once it has finished" });
+    }
+    list.splice(list.indexOf(item), 1);
+    return send(res, 204);
+  }
+  if (sub === "link" && method === "POST") {
+    if (item.status !== "ready") return send(res, 404, { detail: "the export is not ready" });
+    const token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    downloadTokens.set(token, { server: server.name, id: item.id });
+    return send(res, 200, {
+      url: `http://127.0.0.1:${PORT}/mock/download/${token}`,
+      expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+    });
+  }
+  if (sub?.startsWith("preview/") && method === "GET") {
+    const file = decodeURIComponent(sub.slice("preview/".length));
+    if (item.status !== "ready" || !PREVIEW_FILE_RE.test(file) || !PREVIEW_FILES.has(file)) {
+      return send(res, 404, { detail: "no such preview file" });
+    }
+    res.writeHead(200, { "content-type": file.endsWith(".json") ? "application/json" : "application/octet-stream" });
+    return res.end(PREVIEW_FILES.get(file));
   }
   return send(res, 405, { message: "method not allowed" });
 }
