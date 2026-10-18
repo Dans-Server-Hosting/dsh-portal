@@ -142,7 +142,11 @@ in state `provisioning` and moves to `waking` and then `awake` by itself over
 Wake moves an asleep, stopped or failed server to `waking` and then `awake`
 after `MOCK_WAKE_MS` (default 3 s). The mock listens on `127.0.0.1` at
 `MOCK_PORT` (default 4000); if it is moved, change `DSH_API_URL` and
-`USERAUTH_URL` in `.env.local` to match. It also has test-only controls: `POST /mock/reset`,
+`USERAUTH_URL` in `.env.local` to match. Plugin selection is on unless the
+mock is started with `MOCK_PLUGIN_SELECTION=false`, in which case the plugin
+endpoints answer 503 and the server page shows the default plugins;
+`POST /mock/plugins` switches it while running, and `POST /mock/reset` puts it
+back to what `MOCK_PLUGIN_SELECTION` says. The mock also has test-only controls: `POST /mock/reset`,
 `POST /mock/feedback/reset`, `POST /mock/servers/{name}/state` with
 `{ "state": "awake", "players_online": 1 }` to simulate a player joining (or
 `"stopped"`, or anything else; it also stops the automatic progression for
