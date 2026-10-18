@@ -146,7 +146,7 @@ after `MOCK_WAKE_MS` (default 3 s). The mock listens on `127.0.0.1` at
 mock is started with `MOCK_PLUGIN_SELECTION=false`, in which case the plugin
 endpoints answer 503 and the server page shows the default plugins;
 `POST /mock/plugins` switches it while running, and `POST /mock/reset` puts it
-back to what `MOCK_PLUGIN_SELECTION` says. It also has test-only controls: `POST /mock/reset`,
+back to what `MOCK_PLUGIN_SELECTION` says. The mock also has test-only controls: `POST /mock/reset`,
 `POST /mock/feedback/reset`, `POST /mock/servers/{name}/state` with
 `{ "state": "awake", "players_online": 1 }` to simulate a player joining (or
 `"stopped"`, or anything else; it also stops the automatic progression for
