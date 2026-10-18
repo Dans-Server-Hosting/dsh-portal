@@ -44,8 +44,9 @@
 //                                          502 { detail } (what dsh-api's ClusterError handler sends) until
 //                                          { detail: null } or a reset
 //   POST   /mock/plugins                   { enabled } switches plugin selection on (the default) or off,
-//                                          as DSH_PLUGIN_SELECTION does
-//   POST   /mock/reset
+//                                          as DSH_PLUGIN_SELECTION does; it starts off when
+//                                          MOCK_PLUGIN_SELECTION=false
+//   POST   /mock/reset                     also restores plugin selection to MOCK_PLUGIN_SELECTION
 //   POST   /mock/feedback/reset            clear feedback and the rate-limit counters only
 import http from "node:http";
 
