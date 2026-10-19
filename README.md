@@ -197,7 +197,7 @@ username `admin` as an administrator; every other account is a normal user.
 npm run lint
 npm run typecheck
 npm run build
-npm test            # Playwright: register → sign in → create (202 → provisioning → online, 409 while pending, provisioning/stopped pills) → see → delete, a 502 from the API, feedback → admin, change password, plugins (install with a dependency, remove, restart to apply, selection off), desktop + 400px phone
+npm test            # Playwright: register → sign in → create (202 → provisioning → online, 409 while pending, provisioning/stopped pills) → see → delete, a 502 from the API, feedback → admin, change password, plugins (install with a dependency, remove, restart to apply, selection off), 3D export (export, preview, download, delete, a live copy, a failure, a chosen area, the daily limit, switched off, the preview by taps on an iPhone profile), dark/light toggle, SEO tags + robots.txt + sitemap, desktop + 400px phone
 ```
 
 `npm test` starts the mock (with `MOCK_PROVISION_MS` set high, so the tests
