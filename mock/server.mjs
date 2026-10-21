@@ -1,4 +1,4 @@
-// A tiny in-memory stand-in for dsh-api and for UserAuth's login redirect.
+// A tiny in-memory stand-in for dsh-api and for UserAuth's REST API.
 // It exists so the portal can be developed and smoke-tested without a
 // cluster; nothing here is ever deployed. Zero dependencies on purpose.
 //
