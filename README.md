@@ -112,6 +112,7 @@ running in the cluster.
 | `/auth/login` | username + password → UserAuth `POST /login`; a 401 is shown plainly |
 | `/auth/register` | username, password (rules hinted as you type), optional email → `POST /register`, then signed in |
 | `/auth/signout` (POST) | revokes the token at UserAuth and clears the cookie |
+| `/api/servers/[name]/plugins…`, `/api/catalog` | the plugin proxies: the server's plugins, install and remove one (`PUT` / `DELETE` `plugins/[slug]`), and `apply`, which sends `confirm_players: false` unless the browser sent exactly `true`; `/api/catalog` needs no session, as the catalog is public at `dsh-api` |
 | `/api/servers/[name]/exports…` | the world-export proxies: list/start, one/delete, `link`, and `preview/[file]`, which passes usd-web's `index.json` and `*.uwt` tiles through as bytes (any other file name is a 404) |
 | `/robots.txt`, `/sitemap.xml` | generated from `src/app/robots.ts` and `src/app/sitemap.ts`: the signed-in pages and `/api/` are disallowed, and the sitemap lists the public pages (`/`, `/auth/login`, `/auth/register`) |
 
