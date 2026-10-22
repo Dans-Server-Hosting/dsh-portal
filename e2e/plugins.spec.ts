@@ -157,3 +157,30 @@ test("while plugin selection is switched off, the server page lists the default 
   await expect(page.getByTestId("default-plugins").getByRole("listitem")).toHaveCount(3);
   await expect(page.getByTestId("plugins-section")).toHaveCount(0);
 });
+
+test("the catalog proxy needs no sign-in; the server's plugin proxies do", async ({ page }) => {
+  const catalog = await page.request.get("/api/catalog");
+  expect(catalog.status()).toBe(200);
+  expect(((await catalog.json()) as { slug: string }[]).map((p) => p.slug)).toContain("medieval-factions");
+
+  expect((await page.request.get(`/api/servers/${SERVER}/plugins`)).status()).toBe(401);
+  expect((await page.request.put(`/api/servers/${SERVER}/plugins/fiefs`)).status()).toBe(401);
+  expect((await page.request.delete(`/api/servers/${SERVER}/plugins/viabackwards`)).status()).toBe(401);
+  expect((await page.request.post(`/api/servers/${SERVER}/plugins/apply`, { data: { confirm_players: true } })).status()).toBe(401);
+});
+
+test("apply only confirms a restart over players when the browser sends exactly true", async ({ page }) => {
+  await signIn(page, USER, PASSWORD);
+  await setMockState(SERVER, "awake", 2);
+  const apply = (data?: unknown) => page.request.post(`/api/servers/${SERVER}/plugins/apply`, data === undefined ? {} : { data });
+
+  for (const data of [undefined, {}, { confirm_players: "true" }, { confirm_players: 1 }, { confirm_players: false }]) {
+    const refused = await apply(data);
+    expect(refused.status(), JSON.stringify(data)).toBe(409);
+    expect(((await refused.json()) as { players_online?: number }).players_online).toBe(2);
+  }
+
+  const confirmed = await apply({ confirm_players: true });
+  expect(confirmed.status()).toBe(202);
+  expect(await confirmed.json()).toEqual({ applies: "restarting" });
+});
