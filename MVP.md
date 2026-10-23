@@ -13,7 +13,7 @@
 
 | Route | Shows |
 |---|---|
-| `/` | what the free tier is (limits from `GET /api/v1/limits`), what comes installed (`GET /api/v1/default-plugins`), how sleeping works, "Sign in" / "Create account" |
+| `/` | what the free tier is (limits from `GET /api/v1/limits`), what comes installed (`GET /api/v1/default-plugins`) and where more plugins come from (the catalog while `GET /api/v1/catalog` answers, else the dashboard), how sleeping works, "Sign in" / "Create account" |
 | `/servers` | the signed-in user's servers: name, address to copy, state pill (provisioning / asleep / waking / awake / stopped / failed), "Open dashboard", "Wake", "Delete" |
 | `/servers/new` | name, MOTD, your Minecraft username (becomes operator), a line naming the plugins it comes with → create; the API answers 202 straight away and the page shows the address with a live status until the server is online; a second create while one is pending says so and links to it |
 | `/account` | who is signed in; change password (current, new, confirm, the same live rules as registration) through UserAuth |

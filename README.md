@@ -102,7 +102,7 @@ running in the cluster.
 
 | Route | Shows |
 |---|---|
-| `/` | the free tier (limits fetched live from `GET /api/v1/limits`), what comes installed (`GET /api/v1/default-plugins`: name, version, description, link to the project), how sleeping works, Sign in |
+| `/` | the free tier (limits fetched live from `GET /api/v1/limits`), what comes installed (`GET /api/v1/default-plugins`: name, version, description, link to the project) and where more plugins come from (the catalog on the server page while `GET /api/v1/catalog` answers, else the dashboard), how sleeping works, Sign in |
 | `/servers` | the signed-in user's servers: name, address to copy, state pill, Open dashboard, Wake, Delete |
 | `/servers/new` | name, MOTD, Minecraft username (becomes operator); a line naming the plugins it comes with → create (202); address + one-time password with a live status until online; 403/409/422 shown in plain language, "already being created" links to the pending server |
 | `/account` | who is signed in, and a change-password form (current, new, confirm, live rules) → UserAuth via `POST /api/account/password` |
