@@ -23,6 +23,8 @@ test("create → see → delete", async ({ page, context }, testInfo) => {
   await expect(plugins).toContainText("5.12.0");
   await expect(plugins).toContainText("older Minecraft versions");
   await expect(plugins.getByRole("link", { name: "ViaVersion" })).toHaveAttribute("href", "https://github.com/ViaVersion/ViaVersion");
+  // with plugin selection on, more plugins come from the catalog, not the dashboard
+  await expect(page.getByTestId("add-plugins-note")).toContainText("Dan's Plugins catalog with one button");
   await expect(page.getByTestId("dansplugins-note").getByRole("link", { name: "dansplugins.com" })).toHaveAttribute(
     "href",
     "https://dansplugins.com",

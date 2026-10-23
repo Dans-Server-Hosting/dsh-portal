@@ -37,6 +37,17 @@ async function loadDefaultPlugins(): Promise<DefaultPlugin[] | null> {
   }
 }
 
+// The catalog answers 503 while plugin selection is switched off; the
+// dashboard is then the only way to add a plugin.
+async function catalogAvailable(): Promise<boolean> {
+  try {
+    await api.catalog();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function Fact({ value, label }: { value: string; label: string }) {
   return (
     <Grid size={{ xs: 6, sm: 4 }}>
@@ -55,7 +66,12 @@ function Fact({ value, label }: { value: string; label: string }) {
 }
 
 export default async function LandingPage() {
-  const [limits, plugins, session] = await Promise.all([loadLimits(), loadDefaultPlugins(), getSession()]);
+  const [limits, plugins, session, hasCatalog] = await Promise.all([
+    loadLimits(),
+    loadDefaultPlugins(),
+    getSession(),
+    catalogAvailable(),
+  ]);
   const perTenant = limits?.servers_per_tenant ?? 1;
 
   return (
@@ -108,8 +124,10 @@ export default async function LandingPage() {
         <Typography variant="h2" component="h2" id="plugins-heading" gutterBottom>
           What comes installed
         </Typography>
-        <Typography color="text.secondary" sx={{ mb: 2 }}>
-          Every new server starts with these plugins. Anything else is yours to add from the dashboard.
+        <Typography color="text.secondary" sx={{ mb: 2 }} data-testid="add-plugins-note">
+          {hasCatalog
+            ? "Every new server starts with these plugins. Add more from the Dan's Plugins catalog with one button on your server's page, or upload any other plugin from the dashboard."
+            : "Every new server starts with these plugins. Anything else is yours to add from the dashboard."}
         </Typography>
         {plugins && plugins.length > 0 ? (
           <>

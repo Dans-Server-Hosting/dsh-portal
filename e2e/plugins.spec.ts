@@ -156,6 +156,11 @@ test("while plugin selection is switched off, the server page lists the default 
   await expect(page.getByText("Installed by default")).toBeVisible();
   await expect(page.getByTestId("default-plugins").getByRole("listitem")).toHaveCount(3);
   await expect(page.getByTestId("plugins-section")).toHaveCount(0);
+  // the landing page then still points to the dashboard, the only way to add one
+  await page.goto("/");
+  await expect(page.getByTestId("add-plugins-note")).toHaveText(
+    "Every new server starts with these plugins. Anything else is yours to add from the dashboard.",
+  );
 });
 
 test("the catalog proxy needs no sign-in; the server's plugin proxies do", async ({ page }) => {
