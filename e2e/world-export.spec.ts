@@ -160,6 +160,43 @@ test("the daily limit is explained with the time to wait", async ({ page }) => {
   );
 });
 
+test("the export proxies need sign-in; the preview proxy forwards only usd-web files", async ({ page }) => {
+  await setMockWorldExport(true);
+  const base = `/api/servers/${SERVER}/exports`;
+  expect((await page.request.get(base)).status()).toBe(401);
+  expect((await page.request.post(base, { data: {} })).status()).toBe(401);
+  expect((await page.request.get(`${base}/abc123`)).status()).toBe(401);
+  expect((await page.request.delete(`${base}/abc123`)).status()).toBe(401);
+  expect((await page.request.post(`${base}/abc123/link`)).status()).toBe(401);
+  expect((await page.request.get(`${base}/abc123/preview/index.json`)).status()).toBe(401);
+  // The file name is checked before the session, so this 404 is the portal's, not the API's.
+  for (const file of ["world.zip", "index.html", "t.0.0.NOTHEX.uwt"]) {
+    expect((await page.request.get(`${base}/abc123/preview/${file}`)).status(), file).toBe(404);
+  }
+
+  await signIn(page, USER, PASSWORD);
+  const started = await page.request.post(base, { data: {} });
+  expect(started.status()).toBe(202);
+  const { id } = (await started.json()) as { id: string };
+  await expect
+    .poll(async () => ((await (await page.request.get(`${base}/${id}`)).json()) as { status: string }).status, {
+      timeout: 20_000,
+    })
+    .toBe("ready");
+
+  const index = await page.request.get(`${base}/${id}/preview/index.json`);
+  expect(index.status()).toBe(200);
+  expect(index.headers()["content-type"]).toContain("application/json");
+  expect(index.headers()["cache-control"]).toBe("private, no-store");
+  expect(((await index.json()) as { format: string }).format).toBe("usd-web-index");
+
+  const tile = await page.request.get(`${base}/${id}/preview/t.0.0.f3b10b7f791a.uwt`);
+  expect(tile.status()).toBe(200);
+  expect(tile.headers()["content-type"]).toBe("application/octet-stream");
+  expect(tile.headers()["cache-control"]).toBe("private, max-age=3600, immutable");
+  expect((await tile.body()).length).toBeGreaterThan(0);
+});
+
 test.describe("on an iPhone", () => {
   // The iPhone preset asks for WebKit; the suite runs Chromium, with the iPhone's size, touch and pixel ratio.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
