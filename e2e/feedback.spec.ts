@@ -130,3 +130,19 @@ test("the feedback page itself needs a sign-in", async ({ page }) => {
   await page.goto("/feedback");
   await expect(page).toHaveURL(/\/auth\/login$/);
 });
+
+test("the feedback proxies need sign-in; their own checks run first", async ({ page }) => {
+  expect((await page.request.post("/api/feedback", { data: { message: MESSAGE, page: "/servers" } })).status()).toBe(401);
+  expect((await page.request.get("/api/feedback?status=all")).status()).toBe(401);
+  expect((await page.request.patch("/api/feedback/1", { data: { status: "read" } })).status()).toBe(401);
+  // The filter, the id and the body are checked before the session, so these 400s are the portal's, not the API's.
+  expect((await page.request.get("/api/feedback?status=everything")).status()).toBe(400);
+  expect((await page.request.patch("/api/feedback/one", { data: { status: "read" } })).status()).toBe(400);
+  expect((await page.request.patch("/api/feedback/1", { data: { status: "done" } })).status()).toBe(400);
+
+  // Nothing signed out reached the API: the admin's list is still empty.
+  await signIn(page, ADMIN, PASSWORD);
+  const all = await page.request.get("/api/feedback?status=all");
+  expect(all.status()).toBe(200);
+  expect(await all.json()).toEqual([]);
+});
