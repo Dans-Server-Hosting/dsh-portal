@@ -178,6 +178,19 @@ test("protected pages send a signed-out visitor to the sign-in form", async ({ p
   await expect(page).toHaveURL(/\/auth\/register$/);
 });
 
+test("the server proxies need sign-in", async ({ page }) => {
+  expect((await page.request.get("/api/servers")).status()).toBe(401);
+  expect((await page.request.post("/api/servers", { data: { name: SERVER } })).status()).toBe(401);
+  expect((await page.request.get(`/api/servers/${SERVER}`)).status()).toBe(401);
+  expect((await page.request.delete(`/api/servers/${SERVER}`)).status()).toBe(401);
+  expect((await page.request.delete(`/api/servers/${SERVER}?force=true`)).status()).toBe(401);
+  expect((await page.request.post(`/api/servers/${SERVER}/wake`)).status()).toBe(401);
+  // The body is parsed before the session, so a non-JSON create is the portal's own 400.
+  const notJson = await page.request.post("/api/servers", { data: "not json", headers: { "content-type": "text/plain" } });
+  expect(notJson.status()).toBe(400);
+  expect(await notJson.json()).toEqual({ message: "The request body must be JSON." });
+});
+
 test("a taken username is refused at registration", async ({ page }) => {
   const taken = await fetch(`${MOCK_URL}/userauth/register`, {
     method: "POST",
