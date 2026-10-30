@@ -45,6 +45,22 @@ test("a name containing omcsi is refused before anything is sent", async ({ page
   expect(posted, "nothing is sent while the name is refused").toBe(0);
 });
 
+// The form trims before it sends, so these go to the proxy directly: it trims
+// the name and MOTD itself and leaves a blank MOTD out for dsh-api's default.
+test("the create proxy trims the name and MOTD", async ({ page }) => {
+  await signIn(page, USER, PASSWORD);
+  const created = await page.request.post("/api/servers", { data: { name: "  padded-name  ", motd: "  Padded world  " } });
+  expect(created.status()).toBe(202);
+  expect(await created.json()).toMatchObject({ name: "padded-name", motd: "Padded world" });
+});
+
+test("the create proxy leaves a blank MOTD out", async ({ page }) => {
+  await signIn(page, USER, PASSWORD);
+  const created = await page.request.post("/api/servers", { data: { name: "blank-motd", motd: "   " } });
+  expect(created.status()).toBe(202);
+  expect(await created.json()).toMatchObject({ name: "blank-motd", motd: "A Minecraft Server" });
+});
+
 test("a server that is not yours, or does not exist, is the not-found page", async ({ page }, testInfo) => {
   await signIn(page, USER, PASSWORD);
   for (const name of [OTHERS_SERVER, "no-such-server"]) {
