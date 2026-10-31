@@ -57,7 +57,7 @@ test("change password: wrong current, weak new, then success and sign in with th
   await expect(page).toHaveURL(/\/account$/);
   await snapshot(page, testInfo, "account-wrong-current");
 
-  // ---- UserAuth's own 400 comes through the route handler as it was said ----
+  // ---- a weak new password sent straight to the handler is its own 400, in the policy's words ----
   const weakUpstream = await page.request.post("/api/account/password", {
     data: { currentPassword: PASSWORD, newPassword: "weak" },
   });
@@ -89,6 +89,33 @@ test("change password: wrong current, weak new, then success and sign in with th
   await page.getByTestId("password-input").fill(NEW_PASSWORD);
   await page.getByTestId("login-submit").click();
   await expect(page).toHaveURL(/\/servers$/);
+});
+
+test("the password handler's own refusals, and a wrong password told apart from an expired session", async ({ page, context }) => {
+  await signIn(page, USER, PASSWORD);
+  const change = (data: unknown, headers?: Record<string, string>) => page.request.post("/api/account/password", { data, headers });
+
+  // ---- refused by the handler before UserAuth is asked ----
+  const notJson = await change("not json", { "content-type": "text/plain" });
+  expect(notJson.status()).toBe(400);
+  expect(await notJson.json()).toEqual({ message: "The request body must be JSON." });
+  const noCurrent = await change({ newPassword: NEW_PASSWORD });
+  expect(noCurrent.status()).toBe(400);
+  expect(await noCurrent.json()).toEqual({ message: "Enter your current password." });
+
+  // ---- UserAuth's 401 for a wrong current password is answered as a 403 while the session is alive ----
+  const wrong = await change({ currentPassword: "Not-the-passw0rd!", newPassword: NEW_PASSWORD });
+  expect(wrong.status()).toBe(403);
+  expect(await wrong.json()).toEqual({ message: "That is not your current password." });
+
+  // ---- once UserAuth no longer accepts the token, the same request is a 401 ----
+  const token = (await context.cookies()).find((c) => c.name === "dsh_session")?.value;
+  expect(token, "signed in").toBeTruthy();
+  const logout = await fetch(`${MOCK_URL}/userauth/logout`, { method: "POST", headers: { authorization: `Bearer ${token}` } });
+  expect(logout.status).toBe(204);
+  const expired = await change({ currentPassword: "Not-the-passw0rd!", newPassword: NEW_PASSWORD });
+  expect(expired.status()).toBe(401);
+  expect(await expired.json()).toEqual({ message: "Your session has expired." });
 });
 
 test("the account page and its handler need a sign-in", async ({ page }) => {
