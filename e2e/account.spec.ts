@@ -57,7 +57,7 @@ test("change password: wrong current, weak new, then success and sign in with th
   await expect(page).toHaveURL(/\/account$/);
   await snapshot(page, testInfo, "account-wrong-current");
 
-  // ---- UserAuth's own 400 comes through the route handler as it was said ----
+  // ---- a weak new password sent straight to the handler is its own 400, in the policy's words ----
   const weakUpstream = await page.request.post("/api/account/password", {
     data: { currentPassword: PASSWORD, newPassword: "weak" },
   });
