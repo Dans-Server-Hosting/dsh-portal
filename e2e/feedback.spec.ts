@@ -139,10 +139,32 @@ test("the feedback proxies need sign-in; their own checks run first", async ({ p
   expect((await page.request.get("/api/feedback?status=everything")).status()).toBe(400);
   expect((await page.request.patch("/api/feedback/one", { data: { status: "read" } })).status()).toBe(400);
   expect((await page.request.patch("/api/feedback/1", { data: { status: "done" } })).status()).toBe(400);
+  const notJson = { data: "not json", headers: { "content-type": "text/plain" } };
+  expect((await page.request.post("/api/feedback", notJson)).status()).toBe(400);
+  expect((await page.request.patch("/api/feedback/1", notJson)).status()).toBe(400);
 
   // Nothing signed out reached the API: the admin's list is still empty.
   await signIn(page, ADMIN, PASSWORD);
   const all = await page.request.get("/api/feedback?status=all");
   expect(all.status()).toBe(200);
   expect(await all.json()).toEqual([]);
+});
+
+// The form only ever sends a portal path, so these go to the proxy directly: it
+// keeps `page` only when it is a path on the portal (a leading single slash, at
+// most 200 characters). The mock would keep any string and cut it at 200, so a
+// null here is the proxy's doing.
+test("the feedback proxy keeps only a portal path as the page", async ({ page }) => {
+  await signIn(page, USER, PASSWORD);
+  const send = async (data: unknown) => {
+    const response = await page.request.post("/api/feedback", { data });
+    expect(response.status()).toBe(201);
+    return (await response.json()) as { message: string; page: string | null };
+  };
+  expect(await send({ message: "on-site", page: "/servers" })).toMatchObject({ message: "on-site", page: "/servers" });
+  expect((await send({ message: "off-site", page: "https://example.com/servers" })).page).toBeNull();
+  expect((await send({ message: "protocol-relative", page: "//example.com/servers" })).page).toBeNull();
+  expect((await send({ message: "too long", page: `/${"a".repeat(200)}` })).page).toBeNull();
+  const longest = `/${"a".repeat(199)}`;
+  expect((await send({ message: "longest kept", page: longest })).page).toBe(longest);
 });
