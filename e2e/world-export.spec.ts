@@ -197,6 +197,46 @@ test("the export proxies need sign-in; the preview proxy forwards only usd-web f
   expect((await tile.body()).length).toBeGreaterThan(0);
 });
 
+test("the create proxy passes on an area of whole-number corners and otherwise exports the default box", async ({ page }) => {
+  await setMockWorldExport(true);
+  const base = `/api/servers/${SERVER}/exports`;
+  // dsh-api itself refuses corners that are not whole numbers, so the 202s below are the proxy dropping the area.
+  const direct = await fetch(`http://127.0.0.1:4000/api/v1/servers/${SERVER}/exports`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${await tokenFromMock(USER, PASSWORD)}`, "content-type": "application/json" },
+    body: JSON.stringify({ area: { x1: "0", z1: 0, x2: 9, z2: 9 } }),
+  });
+  expect(direct.status).toBe(422);
+
+  await signIn(page, USER, PASSWORD);
+  const startAndFinish = async (data: unknown) => {
+    const started = await page.request.post(base, { data });
+    expect(started.status(), JSON.stringify(data)).toBe(202);
+    const item = (await started.json()) as { id: string; custom_area: boolean };
+    // one export at a time per server: the next starts once this one is done
+    await expect
+      .poll(async () => ((await (await page.request.get(`${base}/${item.id}`)).json()) as { status: string }).status, {
+        timeout: 20_000,
+      })
+      .toBe("ready");
+    return item;
+  };
+
+  // Five exports a day: four the proxy reduces to the default box, one it passes on.
+  for (const data of [
+    { area: { x1: "0", z1: 0, x2: 9, z2: 9 } },
+    { area: { x1: 0, z1: 0, x2: 9.5, z2: 9 } },
+    { area: { x1: 0, z1: 0, x2: 9 } },
+    "not json",
+  ]) {
+    expect((await startAndFinish(data)).custom_area, JSON.stringify(data)).toBe(false);
+  }
+  const custom = await startAndFinish({ area: { x1: 9, z1: 0, x2: 0, z2: 9 } });
+  expect(custom.custom_area).toBe(true);
+  const ready = (await (await page.request.get(`${base}/${custom.id}`)).json()) as { area: unknown };
+  expect(ready.area).toEqual({ x1: 0, z1: 0, x2: 9, z2: 9 });
+});
+
 test.describe("on an iPhone", () => {
   // The iPhone preset asks for WebKit; the suite runs Chromium, with the iPhone's size, touch and pixel ratio.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
