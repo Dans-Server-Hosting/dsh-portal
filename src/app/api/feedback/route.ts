@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { api } from "@/lib/api";
-import { withSession } from "@/lib/proxy";
+import { jsonObject, withSession } from "@/lib/proxy";
 import { isFeedbackFilter, portalPathOrNull, type FeedbackRequest } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -14,12 +14,8 @@ export function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  let body: FeedbackRequest;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ message: "The request body must be JSON." }, { status: 400 });
-  }
+  const body = await jsonObject(request);
+  if (!body) return NextResponse.json({ message: "The request body must be JSON." }, { status: 400 });
   const payload: FeedbackRequest = { message: String(body.message ?? "").trim() };
   const page = portalPathOrNull(body.page);
   if (page) payload.page = page;

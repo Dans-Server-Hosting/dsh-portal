@@ -127,7 +127,7 @@ test("the password handler answers a body that is not a JSON object with its own
   }
 });
 
-test("the account page and its handler need a sign-in",async ({ page }) => {
+test("the account page and its handler need a sign-in", async ({ page }) => {
   await page.goto("/account");
   await expect(page).toHaveURL(/\/auth\/login$/);
   const response = await page.request.post("/api/account/password", { data: { currentPassword: "a", newPassword: "b" } });

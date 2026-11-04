@@ -77,7 +77,7 @@ test("the create proxy answers a body that is not a JSON object with its own 400
   }
 });
 
-test("a server that is not yours, or does not exist, is the not-found page",async ({ page }, testInfo) => {
+test("a server that is not yours, or does not exist, is the not-found page", async ({ page }, testInfo) => {
   await signIn(page, USER, PASSWORD);
   for (const name of [OTHERS_SERVER, "no-such-server"]) {
     await page.goto(`/servers/${name}`);

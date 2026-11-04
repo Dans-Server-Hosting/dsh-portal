@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { newPasswordProblem } from "@/lib/credentials";
+import { jsonObject } from "@/lib/proxy";
 import { getSession } from "@/lib/session";
-import type { ChangePasswordRequest } from "@/lib/types";
 import { userAuth, UserAuthError } from "@/lib/userauth";
 
 export const dynamic = "force-dynamic";
@@ -19,12 +19,8 @@ export async function POST(request: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ message: "You are not signed in." }, { status: 401 });
 
-  let body: Partial<ChangePasswordRequest>;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ message: "The request body must be JSON." }, { status: 400 });
-  }
+  const body = await jsonObject(request);
+  if (!body) return NextResponse.json({ message: "The request body must be JSON." }, { status: 400 });
   const currentPassword = typeof body.currentPassword === "string" ? body.currentPassword : "";
   const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
   if (!currentPassword) return NextResponse.json({ message: "Enter your current password." }, { status: 400 });
