@@ -150,6 +150,18 @@ test("the feedback proxies need sign-in; their own checks run first", async ({ p
   expect(await all.json()).toEqual([]);
 });
 
+test("the feedback proxies answer a body that is not a JSON object with their own 400", async ({ page }) => {
+  for (const data of ["null", "[]", "5"]) {
+    const options = { data, headers: { "content-type": "application/json" } };
+    const sent = await page.request.post("/api/feedback", options);
+    expect(sent.status(), data).toBe(400);
+    expect(await sent.json(), data).toEqual({ message: "The request body must be JSON." });
+    const patched = await page.request.patch("/api/feedback/1", options);
+    expect(patched.status(), data).toBe(400);
+    expect(await patched.json(), data).toEqual({ message: "The request body must be JSON." });
+  }
+});
+
 // The form only ever sends a portal path, so these go to the proxy directly: it
 // keeps `page` only when it is a path on the portal (a leading single slash, at
 // most 200 characters). The mock would keep any string and cut it at 200, so a
