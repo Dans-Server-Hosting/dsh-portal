@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { api } from "@/lib/api";
-import { withSession } from "@/lib/proxy";
+import { jsonObject, withSession } from "@/lib/proxy";
 import type { CreateServerRequest } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -11,15 +11,13 @@ export function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  let body: CreateServerRequest;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ message: "The request body must be JSON." }, { status: 400 });
-  }
+  const body = await jsonObject(request);
+  if (!body) return NextResponse.json({ message: "The request body must be JSON." }, { status: 400 });
   const payload: CreateServerRequest = { name: String(body.name ?? "").trim() };
-  if (body.motd?.trim()) payload.motd = body.motd.trim();
-  if (body.operator_username?.trim()) payload.operator_username = body.operator_username.trim();
+  const motd = typeof body.motd === "string" ? body.motd.trim() : "";
+  if (motd) payload.motd = motd;
+  const operator = typeof body.operator_username === "string" ? body.operator_username.trim() : "";
+  if (operator) payload.operator_username = operator;
   // dsh-api answers 202 with the server in state `provisioning`; the browser
   // then watches GET /api/servers/{name} until it is awake.
   return withSession((token) => api.createServer(token, payload), 202);

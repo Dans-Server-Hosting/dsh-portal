@@ -61,6 +61,22 @@ test("the create proxy leaves a blank MOTD out", async ({ page }) => {
   expect(await created.json()).toMatchObject({ name: "blank-motd", motd: "A Minecraft Server" });
 });
 
+test("the create proxy treats a MOTD or operator that is not a string as left out", async ({ page }) => {
+  await signIn(page, USER, PASSWORD);
+  const created = await page.request.post("/api/servers", { data: { name: "number-motd", motd: 5, operator_username: 5 } });
+  expect(created.status()).toBe(202);
+  expect(await created.json()).toMatchObject({ name: "number-motd", motd: "A Minecraft Server" });
+});
+
+test("the create proxy answers a body that is not a JSON object with its own 400", async ({ page }) => {
+  // The body is parsed before the session, so no sign-in is needed to reach this.
+  for (const data of ["null", "[]", "5"]) {
+    const response = await page.request.post("/api/servers", { data, headers: { "content-type": "application/json" } });
+    expect(response.status(), data).toBe(400);
+    expect(await response.json(), data).toEqual({ message: "The request body must be JSON." });
+  }
+});
+
 test("a server that is not yours, or does not exist, is the not-found page", async ({ page }, testInfo) => {
   await signIn(page, USER, PASSWORD);
   for (const name of [OTHERS_SERVER, "no-such-server"]) {

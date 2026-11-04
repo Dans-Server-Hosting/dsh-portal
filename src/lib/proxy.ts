@@ -1,8 +1,21 @@
 import "server-only";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { ApiError, NOT_REACHABLE } from "./api";
 import { getSession } from "./session";
 import type { ApiErrorBody } from "./types";
+
+/**
+ * The request's body when it is a JSON object; null for anything else (not
+ * JSON, or JSON such as `null` or a list), which a handler answers as a 400.
+ */
+export async function jsonObject(request: NextRequest): Promise<Record<string, unknown> | null> {
+  try {
+    const body: unknown = await request.json();
+    return body && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Shared plumbing for the portal's own /api/servers* route handlers: the

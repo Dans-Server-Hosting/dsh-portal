@@ -118,6 +118,15 @@ test("the password handler's own refusals, and a wrong password told apart from 
   expect(await expired.json()).toEqual({ message: "Your session has expired." });
 });
 
+test("the password handler answers a body that is not a JSON object with its own 400", async ({ page }) => {
+  await signIn(page, USER, PASSWORD);
+  for (const data of ["null", "[]", "5"]) {
+    const response = await page.request.post("/api/account/password", { data, headers: { "content-type": "application/json" } });
+    expect(response.status(), data).toBe(400);
+    expect(await response.json(), data).toEqual({ message: "The request body must be JSON." });
+  }
+});
+
 test("the account page and its handler need a sign-in", async ({ page }) => {
   await page.goto("/account");
   await expect(page).toHaveURL(/\/auth\/login$/);
