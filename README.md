@@ -28,7 +28,9 @@ running in the cluster.
   Bearer token. The browser never sees the token; it talks to the portal's
   own `/api/*` route handlers (`/api/servers*`, `/api/catalog`,
   `/api/feedback*`, `/api/account/password`). Sign-out revokes the token with
-  `POST /logout` before clearing the cookie.
+  `POST /logout` before clearing the cookie. A token that has died while its
+  cookie lived on (a password change elsewhere signs other sessions out) loses
+  the cookie on the 401 from those handlers, and the browser goes to sign-in.
 - Creating a server is asynchronous: `POST /api/v1/servers` answers **202**
   with the server in state `provisioning` (and the one-time dashboard
   password), and the created view shows the address straight away with a
@@ -57,7 +59,8 @@ running in the cluster.
   with the session's Bearer token. UserAuth's 204 is shown as success with a
   note that every other session was signed out (this one stays); its 401
   (wrong current password) and 400 (policy, or the same password again) are
-  shown plainly. The endpoint's path defaults to `POST /password` and is
+  shown plainly, as is any other refusal in its own words. The endpoint's
+  path defaults to `POST /password` and is
   read from `USERAUTH_CHANGE_PASSWORD_PATH`, so `/password/change` (or
   wherever it settles) is a config change, not a rebuild.
 - `GET /api/v1/me` is fetched server-side, once per request, whenever there
@@ -200,7 +203,7 @@ username `admin` as an administrator; every other account is a normal user.
 npm run lint
 npm run typecheck
 npm run build
-npm test            # Playwright: register → sign in → create (202 → provisioning → online, 409 while pending, provisioning/stopped pills) → see → delete, a name taken by another account or containing "omcsi", the create proxy trimming the name and MOTD and leaving a blank or non-string MOTD out, the create, feedback and password handlers' 400 for a body that is not a JSON object, another account's server as not found, a 502 from the API, a taken username at registration, protected pages sending a signed-out visitor to sign in, the server and feedback proxies' sign-in rule, feedback → admin, the feedback proxy keeping only a portal path as the page, change password (and its handler's sign-in rule), plugins (install with a dependency, remove, restart to apply, selection off, the proxies' sign-in rule and apply's exact-true confirm), 3D export (export, preview, download, delete, a live copy, a failure, a chosen area, the daily limit, switched off, the proxies' sign-in rule and preview file filter, the preview by taps on an iPhone profile), dark/light toggle, SEO tags + robots.txt + sitemap, desktop + 400px phone
+npm test            # Playwright: register → sign in → create (202 → provisioning → online, 409 while pending, provisioning/stopped pills) → see → delete, a name taken by another account or containing "omcsi", the create proxy trimming the name and MOTD and leaving a blank or non-string MOTD out, the create, feedback and password handlers' 400 for a body that is not a JSON object, another account's server as not found, a 502 from the API, a taken username at registration, protected pages sending a signed-out visitor to sign in, the server and feedback proxies' sign-in rule, feedback → admin, the feedback proxy keeping only a portal path as the page, change password (its handler's sign-in rule, and any other refusal in the handler's own words), a dead session going to the sign-in form with its cookie cleared, plugins (install with a dependency, remove, restart to apply, selection off, the proxies' sign-in rule and apply's exact-true confirm), 3D export (export, preview, download, delete, a live copy, a failure, a chosen area, the daily limit, switched off, the proxies' sign-in rule and preview file filter, the preview by taps on an iPhone profile), dark/light toggle, SEO tags + robots.txt + sitemap, desktop + 400px phone
 ```
 
 `npm test` starts the mock (with `MOCK_PROVISION_MS` set high, so the tests
