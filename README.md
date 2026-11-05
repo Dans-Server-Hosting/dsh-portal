@@ -30,7 +30,9 @@ running in the cluster.
   `/api/feedback*`, `/api/account/password`). Sign-out revokes the token with
   `POST /logout` before clearing the cookie. A token that has died while its
   cookie lived on (a password change elsewhere signs other sessions out) loses
-  the cookie on the 401 from those handlers, and the browser goes to sign-in.
+  the cookie on the first 401 from `withSession` or the password handler, and
+  the browser goes to sign-in. The export preview's file handler answers that
+  401 without clearing it; the page's next poll does.
 - Creating a server is asynchronous: `POST /api/v1/servers` answers **202**
   with the server in state `provisioning` (and the one-time dashboard
   password), and the created view shows the address straight away with a
