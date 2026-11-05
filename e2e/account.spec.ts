@@ -1,10 +1,20 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type BrowserContext } from "@playwright/test";
 import { MOCK_URL } from "../playwright.config";
 import { registerAtMock, resetMock, signIn, snapshot, tokenFromMock } from "./helpers";
 
 const USER = "account-user";
 const PASSWORD = "Acc0unt-test!";
 const NEW_PASSWORD = "N3w-account-pw!";
+
+const sessionCookie = async (context: BrowserContext) => (await context.cookies()).find((c) => c.name === "dsh_session");
+
+/** Revokes the browser's token at UserAuth and leaves its cookie alone, as a password change elsewhere does. */
+async function revokeSession(context: BrowserContext) {
+  const token = (await sessionCookie(context))?.value;
+  expect(token, "signed in").toBeTruthy();
+  const logout = await fetch(`${MOCK_URL}/userauth/logout`, { method: "POST", headers: { authorization: `Bearer ${token}` } });
+  expect(logout.status).toBe(204);
+}
 
 test.beforeEach(async () => {
   await resetMock();
@@ -117,6 +127,45 @@ test("the password handler's own refusals, and a wrong password told apart from 
   expect(expired.status()).toBe(401);
   expect(await expired.json()).toEqual({ message: "Your session has expired." });
 });
+
+// The login page sends anyone with a cookie to /servers, so a dead token that
+// kept its cookie would bounce between the two and never reach the form.
+test("a session the API no longer accepts ends at the sign-in form, and signing in works again", async ({ page, context }) => {
+  await signIn(page, USER, PASSWORD);
+  await revokeSession(context);
+
+  // The server list's next poll (10 s) is what finds out.
+  await expect(page.getByTestId("login-submit")).toBeVisible({ timeout: 20_000 });
+  await expect(page).toHaveURL(/\/auth\/login$/);
+  expect(await sessionCookie(context), "the dead cookie is gone").toBeUndefined();
+
+  await signIn(page, USER, PASSWORD);
+  await expect(page.getByTestId("account-link")).toBeVisible();
+});
+
+test("the password handler clears the cookie of a session that has expired", async ({ page, context }) => {
+  await signIn(page, USER, PASSWORD);
+  await revokeSession(context);
+  const expired = await page.request.post("/api/account/password", {
+    data: { currentPassword: "Not-the-passw0rd!", newPassword: NEW_PASSWORD },
+  });
+  expect(expired.status()).toBe(401);
+  expect(await sessionCookie(context), "the dead cookie is gone").toBeUndefined();
+});
+
+// UserAuth's other refusals reach the form with the handler's own words, not a sentence about servers or feedback.
+for (const status of [404, 422, 429]) {
+  test(`a ${status} on the password form shows the handler's message`, async ({ page }) => {
+    await signIn(page, USER, PASSWORD);
+    await page.goto("/account");
+    await page.route("/api/account/password", (route) => route.fulfill({ status, json: { message: "UserAuth refused this." } }));
+    await page.getByTestId("current-password-input").fill(PASSWORD);
+    await page.getByTestId("new-password-input").fill(NEW_PASSWORD);
+    await page.getByTestId("confirm-password-input").fill(NEW_PASSWORD);
+    await page.getByTestId("change-password-submit").click();
+    await expect(page.getByTestId("password-error")).toHaveText("UserAuth refused this.");
+  });
+}
 
 test("the password handler answers a body that is not a JSON object with its own 400", async ({ page }) => {
   await signIn(page, USER, PASSWORD);

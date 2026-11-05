@@ -102,7 +102,11 @@ export function explain(
             ? "That is not your current password."
             : "You do not have permission to do that.";
       case 404:
-        return context === "feedback-status" ? "That feedback no longer exists." : "That server no longer exists.";
+        return context === "password"
+          ? error.message
+          : context === "feedback-status"
+            ? "That feedback no longer exists."
+            : "That server no longer exists.";
       case 409:
         return context === "create"
           ? error.server
@@ -112,9 +116,15 @@ export function explain(
             ? "Players are online right now. Tick the box to delete anyway."
             : error.message;
       case 422:
-        return context === "feedback" ? `That could not be sent: ${error.message}` : `That name is not allowed: ${error.message}`;
+        return context === "password"
+          ? error.message
+          : context === "feedback"
+            ? `That could not be sent: ${error.message}`
+            : `That name is not allowed: ${error.message}`;
       case 429:
-        return "You have sent a lot of feedback in the last hour. Thank you; please try again later.";
+        return context === "feedback"
+          ? "You have sent a lot of feedback in the last hour. Thank you; please try again later."
+          : error.message;
       default:
         // A 502 carries a sentence that is meant to be shown: dsh-api's own
         // detail when a cluster operation failed (retrying would fail the

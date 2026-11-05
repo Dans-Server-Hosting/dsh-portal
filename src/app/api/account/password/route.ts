@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { newPasswordProblem } from "@/lib/credentials";
 import { jsonObject } from "@/lib/proxy";
-import { getSession } from "@/lib/session";
+import { clearSession, getSession } from "@/lib/session";
 import { userAuth, UserAuthError } from "@/lib/userauth";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,8 @@ export const dynamic = "force-dynamic";
  * password) are shown plainly by the form; the latter is answered here as a
  * 403 so the browser does not mistake it for an expired session, which is
  * what a 401 from the portal's own handlers means. A token that really has
- * expired is told apart by asking UserAuth whether it is still valid.
+ * expired is told apart by asking UserAuth whether it is still valid, and
+ * loses its cookie as well.
  */
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -38,7 +39,11 @@ export async function POST(request: NextRequest) {
           .validate(session.token)
           .then(() => true)
           .catch((e) => !(e instanceof UserAuthError && e.status === 401));
-        if (!sessionAlive) return NextResponse.json({ message: "Your session has expired." }, { status: 401 });
+        if (!sessionAlive) {
+          const response = NextResponse.json({ message: "Your session has expired." }, { status: 401 });
+          clearSession(response);
+          return response;
+        }
         return NextResponse.json({ message: "That is not your current password." }, { status: 403 });
       }
       if (error.status < 500) return NextResponse.json({ message: error.message }, { status: error.status });
