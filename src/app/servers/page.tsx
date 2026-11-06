@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Alert from "@mui/material/Alert";
 import Stack from "@mui/material/Stack";
 import ServerList from "@/components/ServerList";
+import SessionExpired from "@/components/SessionExpired";
 import { api, ApiError } from "@/lib/api";
 import { requireSession } from "@/lib/require-session";
 import type { Limits, Server } from "@/lib/types";
@@ -19,6 +20,7 @@ export default async function ServersPage({ searchParams }: { searchParams: Prom
   try {
     [servers, limits] = await Promise.all([api.listServers(session.token), api.limits().catch(() => null)]);
   } catch (error) {
+    if (error instanceof ApiError && error.status === 401) return <SessionExpired />;
     loadError = error instanceof ApiError ? error.message : "The hosting service is not reachable right now.";
   }
 

@@ -31,8 +31,11 @@ running in the cluster.
   `POST /logout` before clearing the cookie. A token that has died while its
   cookie lived on (a password change elsewhere signs other sessions out) loses
   the cookie on the first 401 from `withSession` or the password handler, and
-  the browser goes to sign-in. The export preview's file handler answers that
-  401 without clearing it; the page's next poll does.
+  the browser goes to sign-in. A server-rendered page that gets that 401 (the
+  server list, a server's page, the admin feedback page) cannot clear a cookie
+  itself, so it renders `SessionExpired`, which calls `GET /api/servers` once
+  to the same end. The export preview's file handler answers that 401 without
+  clearing it; the page's next poll does.
 - Creating a server is asynchronous: `POST /api/v1/servers` answers **202**
   with the server in state `provisioning` (and the one-time dashboard
   password), and the created view shows the address straight away with a
@@ -117,8 +120,8 @@ running in the cluster.
 | `/auth/login` | username + password → UserAuth `POST /login`; a 401 is shown plainly |
 | `/auth/register` | username, password (rules hinted as you type), optional email → `POST /register`, then signed in |
 | `/auth/signout` (POST) | revokes the token at UserAuth and clears the cookie |
-| `/api/servers`, `/api/servers/[name]`, `/api/servers/[name]/wake` | the server proxies: list and create (202), one server and delete it (`?force=true` passed on), and wake (202); a create whose body is not a JSON object is the portal's own 400, and a MOTD or operator that is not a string is left out |
-| `/api/feedback`, `/api/feedback/[id]`, `/api/account/password` | the feedback proxies (send, the admin list with `?status=new\|read\|all`, `PATCH` an item to `read` or `new`; a bad filter, id or status, or a body that is not a JSON object, is the portal's own 400) and the change-password handler, which answers such a body with a 400 too and UserAuth's 401 for a wrong current password as a 403 so the browser does not take it for an expired session |
+| `/api/servers`, `/api/servers/[name]`, `/api/servers/[name]/wake` | the server proxies: list and create (202), one server and delete it (`?force=true` passed on), and wake (202); a create whose body is not a JSON object is the portal's own 400, a name that is not a string counts as empty (the API's 422), and a MOTD or operator that is not a string is left out |
+| `/api/feedback`, `/api/feedback/[id]`, `/api/account/password` | the feedback proxies (send, the admin list with `?status=new\|read\|all`, `PATCH` an item to `read` or `new`; a bad filter, id or status, or a body that is not a JSON object, is the portal's own 400, and a message that is not a string counts as empty) and the change-password handler, which answers such a body with a 400 too and UserAuth's 401 for a wrong current password as a 403 so the browser does not take it for an expired session |
 | `/api/servers/[name]/plugins…`, `/api/catalog` | the plugin proxies: the server's plugins, install and remove one (`PUT` / `DELETE` `plugins/[slug]`), and `apply`, which sends `confirm_players: false` unless the browser sent exactly `true`; `/api/catalog` needs no session, as the catalog is public at `dsh-api` |
 | `/api/servers/[name]/exports…` | the world-export proxies: list/start, one/delete, `link`, and `preview/[file]`, which passes usd-web's `index.json` and `*.uwt` tiles through as bytes (any other file name is a 404) |
 | `/robots.txt`, `/sitemap.xml` | generated from `src/app/robots.ts` and `src/app/sitemap.ts`: the signed-in pages and `/api/` are disallowed, and the sitemap lists the public pages (`/`, `/auth/login`, `/auth/register`) |
@@ -205,7 +208,7 @@ username `admin` as an administrator; every other account is a normal user.
 npm run lint
 npm run typecheck
 npm run build
-npm test            # Playwright: register → sign in → create (202 → provisioning → online, 409 while pending, provisioning/stopped pills) → see → delete, a name taken by another account or containing "omcsi", the create proxy trimming the name and MOTD and leaving a blank or non-string MOTD out, the create, feedback and password handlers' 400 for a body that is not a JSON object, another account's server as not found, a 502 from the API, a taken username at registration, protected pages sending a signed-out visitor to sign in, the server and feedback proxies' sign-in rule, feedback → admin, the feedback proxy keeping only a portal path as the page, change password (its handler's sign-in rule, and any other refusal in the handler's own words), a dead session going to the sign-in form with its cookie cleared, plugins (install with a dependency, remove, restart to apply, selection off, the proxies' sign-in rule and apply's exact-true confirm), 3D export (export, preview, download, delete, a live copy, a failure, a chosen area, the daily limit, switched off, the proxies' sign-in rule and preview file filter, the preview by taps on an iPhone profile), dark/light toggle, SEO tags + robots.txt + sitemap, desktop + 400px phone
+npm test            # Playwright: register → sign in → create (202 → provisioning → online, 409 while pending, provisioning/stopped pills) → see → delete, a name taken by another account or containing "omcsi", the create proxy trimming the name and MOTD, leaving a blank or non-string MOTD out and treating a non-string name as empty, the create, feedback and password handlers' 400 for a body that is not a JSON object, another account's server as not found, a 502 from the API, a taken username at registration, protected pages sending a signed-out visitor to sign in, the server and feedback proxies' sign-in rule, feedback → admin, the feedback proxy keeping only a portal path as the page and treating a non-string message as empty, change password (its handler's sign-in rule, and any other refusal in the handler's own words), a dead session going to the sign-in form with its cookie cleared, from a poll or straight from a server-rendered page, plugins (install with a dependency, remove, restart to apply, selection off, the proxies' sign-in rule and apply's exact-true confirm), 3D export (export, preview, download, delete, a live copy, a failure, a chosen area, the daily limit, switched off, the proxies' sign-in rule and preview file filter, the preview by taps on an iPhone profile), dark/light toggle, SEO tags + robots.txt + sitemap, desktop + 400px phone
 ```
 
 `npm test` starts the mock (with `MOCK_PROVISION_MS` set high, so the tests

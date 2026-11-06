@@ -162,6 +162,19 @@ test("the feedback proxies answer a body that is not a JSON object with their ow
   }
 });
 
+test("the feedback proxy treats a message that is not a string as empty", async ({ page }) => {
+  await signIn(page, USER, PASSWORD);
+  for (const message of [{}, [], 5, true]) {
+    const response = await page.request.post("/api/feedback", { data: { message } });
+    expect(response.status(), JSON.stringify(message)).toBe(422);
+  }
+
+  // Nothing was stored: the admin's list is still empty.
+  const adminToken = await tokenFromMock(ADMIN, PASSWORD);
+  const stored = await fetch(`${MOCK_URL}/api/v1/feedback?status=all`, { headers: { authorization: `Bearer ${adminToken}` } });
+  expect(await stored.json()).toEqual([]);
+});
+
 // The form only ever sends a portal path, so these go to the proxy directly: it
 // keeps `page` only when it is a path on the portal (a leading single slash, at
 // most 200 characters). The mock would keep any string and cut it at 200, so a

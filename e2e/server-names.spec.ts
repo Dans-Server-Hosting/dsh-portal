@@ -68,6 +68,16 @@ test("the create proxy treats a MOTD or operator that is not a string as left ou
   expect(await created.json()).toMatchObject({ name: "number-motd", motd: "A Minecraft Server" });
 });
 
+test("the create proxy treats a name that is not a string as empty", async ({ page }) => {
+  await signIn(page, USER, PASSWORD);
+  // `true` matters most: written out as a string it is a name the API would take.
+  for (const name of [{}, [], 5, true]) {
+    const response = await page.request.post("/api/servers", { data: { name } });
+    expect(response.status(), JSON.stringify(name)).toBe(422);
+  }
+  expect(await (await page.request.get("/api/servers")).json()).toEqual([]);
+});
+
 test("the create proxy answers a body that is not a JSON object with its own 400", async ({ page }) => {
   // The body is parsed before the session, so no sign-in is needed to reach this.
   for (const data of ["null", "[]", "5"]) {

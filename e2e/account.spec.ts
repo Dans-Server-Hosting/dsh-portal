@@ -1,8 +1,10 @@
 import { expect, test, type BrowserContext } from "@playwright/test";
 import { MOCK_URL } from "../playwright.config";
-import { registerAtMock, resetMock, signIn, snapshot, tokenFromMock } from "./helpers";
+import { createAtMock, registerAtMock, resetMock, signIn, snapshot, tokenFromMock } from "./helpers";
 
 const USER = "account-user";
+const ADMIN = "admin";
+const DEAD_SESSION_SERVER = "dead-session";
 const PASSWORD = "Acc0unt-test!";
 const NEW_PASSWORD = "N3w-account-pw!";
 
@@ -141,6 +143,34 @@ test("a session the API no longer accepts ends at the sign-in form, and signing 
 
   await signIn(page, USER, PASSWORD);
   await expect(page.getByTestId("account-link")).toBeVisible();
+});
+
+// A server component cannot clear the cookie, so these pages have a proxy find
+// out. The 5 s limit is under the list's 10 s poll, so the poll cannot pass this.
+for (const path of ["/servers", `/servers/${DEAD_SESSION_SERVER}`, "/admin/feedback"]) {
+  test(`${path} with a dead session goes to the sign-in form at once`, async ({ page, context }) => {
+    await registerAtMock(ADMIN, PASSWORD);
+    await createAtMock(await tokenFromMock(ADMIN, PASSWORD), DEAD_SESSION_SERVER);
+    await signIn(page, ADMIN, PASSWORD);
+    await revokeSession(context);
+
+    await page.goto(path);
+    await expect(page.getByTestId("login-submit")).toBeVisible({ timeout: 5_000 });
+    await expect(page).toHaveURL(/\/auth\/login$/);
+    expect(await sessionCookie(context), "the dead cookie is gone").toBeUndefined();
+  });
+}
+
+test("a dead session the proxy cannot confirm is told so, not left waiting", async ({ page, context }, testInfo) => {
+  await signIn(page, USER, PASSWORD);
+  await revokeSession(context);
+  await page.route("/api/servers", (route) => route.fulfill({ status: 502, json: { message: "The proxy is down." } }));
+
+  await page.goto("/servers");
+  await expect(page.getByTestId("session-unconfirmed")).toContainText("could not be checked");
+  await expect(page.getByTestId("session-expired")).toHaveCount(0);
+  await expect(page.getByText("bearer token")).toHaveCount(0);
+  await snapshot(page, testInfo, "session-unconfirmed");
 });
 
 test("the password handler clears the cookie of a session that has expired", async ({ page, context }) => {

@@ -13,7 +13,7 @@ export function GET() {
 export async function POST(request: NextRequest) {
   const body = await jsonObject(request);
   if (!body) return NextResponse.json({ message: "The request body must be JSON." }, { status: 400 });
-  const payload: CreateServerRequest = { name: String(body.name ?? "").trim() };
+  const payload: CreateServerRequest = { name: typeof body.name === "string" ? body.name.trim() : "" };
   const motd = typeof body.motd === "string" ? body.motd.trim() : "";
   if (motd) payload.motd = motd;
   const operator = typeof body.operator_username === "string" ? body.operator_username.trim() : "";
