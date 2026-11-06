@@ -16,7 +16,7 @@ export function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const body = await jsonObject(request);
   if (!body) return NextResponse.json({ message: "The request body must be JSON." }, { status: 400 });
-  const payload: FeedbackRequest = { message: String(body.message ?? "").trim() };
+  const payload: FeedbackRequest = { message: typeof body.message === "string" ? body.message.trim() : "" };
   const page = portalPathOrNull(body.page);
   if (page) payload.page = page;
   return withSession((token) => api.submitFeedback(token, payload), 201);

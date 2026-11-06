@@ -4,8 +4,9 @@ import Alert from "@mui/material/Alert";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import FeedbackAdminList from "@/components/FeedbackAdminList";
+import SessionExpired from "@/components/SessionExpired";
 import { api, ApiError } from "@/lib/api";
-import { getMe } from "@/lib/me";
+import { getMe, isSessionExpired } from "@/lib/me";
 import { requireSession } from "@/lib/require-session";
 import { isFeedbackFilter, type Feedback, type FeedbackFilter } from "@/lib/types";
 
@@ -19,6 +20,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function AdminFeedbackPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const session = await requireSession();
+  if (await isSessionExpired(session.token)) return <SessionExpired />;
   const me = await getMe(session.token);
   if (!me?.is_admin) notFound();
 
