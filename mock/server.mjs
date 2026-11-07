@@ -60,8 +60,12 @@
 //   POST   /mock/world-export              { enabled, outcome? } switches world export on or off, as
 //                                          DSH_WORLD_EXPORT does (off unless MOCK_WORLD_EXPORT=1), and sets
 //                                          how the next exports finish: { snapshot } or { error }
-//   POST   /mock/reset                     also restores plugin selection to MOCK_PLUGIN_SELECTION and
-//                                          world export to MOCK_WORLD_EXPORT
+//   POST   /mock/limits                    { servers_per_tenant, ... } overrides what GET /api/v1/limits
+//                                          answers (and the cap it enforces) until a reset
+//   GET    /mock/api-calls                 { count } of requests to /api/v1/* so far, to show a route
+//                                          reaches no further than the portal
+//   POST   /mock/reset                     also restores plugin selection to MOCK_PLUGIN_SELECTION,
+//                                          world export to MOCK_WORLD_EXPORT and the limits
 //   POST   /mock/feedback/reset            clear feedback and the rate-limit counters only
 import http from "node:http";
 import { readFileSync, readdirSync } from "node:fs";
@@ -95,6 +99,8 @@ const LIMITS = {
   export_daily_limit: 5,
   export_retention_hours: 72,
 };
+const DEFAULT_LIMITS = { ...LIMITS };
+let apiCalls = 0;
 
 // ---- World export (RFC 0021) ----
 const EXPORT_MS = Number(process.env.MOCK_EXPORT_MS || 3000);
@@ -418,6 +424,7 @@ async function handle(req, res) {
   const method = req.method || "GET";
 
   if (method === "OPTIONS") return send(res, 204);
+  if (pathname.startsWith("/api/v1/")) apiCalls += 1;
 
   // ---- fake UserAuth ----
   if (pathname === "/userauth/register" && method === "POST") {
@@ -493,8 +500,14 @@ async function handle(req, res) {
     exportsByServer.clear();
     exportStarts.clear();
     downloadTokens.clear();
+    Object.assign(LIMITS, DEFAULT_LIMITS);
     return send(res, 204);
   }
+  if (method === "POST" && pathname === "/mock/limits") {
+    Object.assign(LIMITS, await readJson(req));
+    return send(res, 204);
+  }
+  if (method === "GET" && pathname === "/mock/api-calls") return send(res, 200, { count: apiCalls });
   if (method === "POST" && pathname === "/mock/world-export") {
     const body = (await readJson(req)) ?? {};
     if (typeof body.enabled === "boolean") worldExport = body.enabled;

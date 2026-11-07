@@ -89,6 +89,23 @@ export async function createAtMock(token: string, name: string) {
   expect(response.status).toBe(202);
 }
 
+/** Overrides what the mock's GET /api/v1/limits answers, until the next reset. */
+export async function setMockLimits(limits: Record<string, number>) {
+  const response = await fetch(`${MOCK_URL}/mock/limits`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(limits),
+  });
+  expect(response.ok).toBeTruthy();
+}
+
+/** How many requests have reached the mock's /api/v1/* so far. */
+export async function mockApiCalls(): Promise<number> {
+  const response = await fetch(`${MOCK_URL}/mock/api-calls`);
+  expect(response.ok).toBeTruthy();
+  return ((await response.json()) as { count: number }).count;
+}
+
 /** Switches the mock's plugin selection on or off, as DSH_PLUGIN_SELECTION does. */
 export async function setMockPluginSelection(enabled: boolean) {
   const response = await fetch(`${MOCK_URL}/mock/plugins`, {

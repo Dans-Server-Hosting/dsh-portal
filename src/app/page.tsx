@@ -14,6 +14,7 @@ import { getSession } from "@/lib/session";
 import type { DefaultPlugin, Limits } from "@/lib/types";
 import { DefaultPluginCards } from "@/components/DefaultPlugins";
 import { publicPageMetadata } from "@/lib/site";
+import { plural } from "@/lib/text";
 
 export const metadata: Metadata = publicPageMetadata("/");
 
@@ -109,11 +110,11 @@ export default async function LandingPage() {
         {limits ? (
           <Grid container spacing={2} data-testid="limits">
             <Fact value={`Minecraft ${limits.minecraft_version}`} label="Java Edition, current version" />
-            <Fact value={`${perTenant} server`} label="per account" />
+            <Fact value={plural(perTenant, "server")} label="per account" />
             <Fact value={`${limits.heap_gb} GB heap`} label={`${limits.memory_limit_gib} GiB of memory in total`} />
             <Fact value={`${limits.world_quota_gib} GB`} label="of world storage" />
-            <Fact value={`${limits.backup_retention_days} days`} label="of backups kept" />
-            <Fact value={`${limits.archive_after_days} days`} label="idle before a server is archived" />
+            <Fact value={plural(limits.backup_retention_days, "day")} label="of backups kept" />
+            <Fact value={plural(limits.archive_after_days, "day")} label="idle before a server is archived" />
           </Grid>
         ) : (
           <Alert severity="warning">The current limits could not be loaded. Try again in a moment.</Alert>
@@ -157,11 +158,11 @@ export default async function LandingPage() {
             minute. You can also press <strong>Wake</strong> in the portal.
           </Typography>
           <Typography component="li">
-            After {limits ? `${limits.idle_minutes} minutes` : "a while"} with nobody online it goes back to sleep.
-            {limits && ` Up to ${limits.max_awake_servers} servers can be awake at once across the whole service, so a wake can occasionally queue.`}
+            After {limits ? plural(limits.idle_minutes, "minute") : "a while"} with nobody online it goes back to sleep.
+            {limits && ` Up to ${plural(limits.max_awake_servers, "server")} can be awake at once across the whole service, so a wake can occasionally queue.`}
           </Typography>
           <Typography component="li">
-            A server nobody has woken for {limits ? `${limits.archive_after_days} days` : "a long time"} is archived;
+            A server nobody has woken for {limits ? plural(limits.archive_after_days, "day") : "a long time"} is archived;
             deleting one always takes a backup first.
           </Typography>
         </Stack>
