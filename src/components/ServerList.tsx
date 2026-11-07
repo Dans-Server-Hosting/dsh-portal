@@ -8,6 +8,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import AddIcon from "@mui/icons-material/Add";
 import { portalFetch } from "@/lib/client";
+import { plural } from "@/lib/text";
 import { usePolling } from "@/lib/usePolling";
 import type { Server } from "@/lib/types";
 import ServerCard from "./ServerCard";
@@ -47,7 +48,7 @@ export default function ServerList({ initial, maxServers }: Props) {
       </Box>
       {atCap && (
         <Typography variant="body2" color="text.secondary">
-          The free tier allows {maxServers} server per account. Delete one to create another.
+          The free tier allows {plural(maxServers, "server")} per account. Delete one to create another.
         </Typography>
       )}
       {actionError && (

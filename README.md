@@ -124,6 +124,7 @@ running in the cluster.
 | `/api/feedback`, `/api/feedback/[id]`, `/api/account/password` | the feedback proxies (send, the admin list with `?status=new\|read\|all`, `PATCH` an item to `read` or `new`; a bad filter, id or status, or a body that is not a JSON object, is the portal's own 400, and a message that is not a string counts as empty) and the change-password handler, which answers such a body with a 400 too and UserAuth's 401 for a wrong current password as a 403 so the browser does not take it for an expired session |
 | `/api/servers/[name]/plugins…`, `/api/catalog` | the plugin proxies: the server's plugins, install and remove one (`PUT` / `DELETE` `plugins/[slug]`), and `apply`, which sends `confirm_players: false` unless the browser sent exactly `true`; `/api/catalog` needs no session, as the catalog is public at `dsh-api` |
 | `/api/servers/[name]/exports…` | the world-export proxies: list/start, one/delete, `link`, and `preview/[file]`, which passes usd-web's `index.json` and `*.uwt` tiles through as bytes (any other file name is a 404) |
+| `/api/health` | what the Kubernetes probes ask: 200 with no session and no call to `dsh-api`, so a slow API does not restart the portal |
 | `/robots.txt`, `/sitemap.xml` | generated from `src/app/robots.ts` and `src/app/sitemap.ts`: the signed-in pages and `/api/` are disallowed, and the sitemap lists the public pages (`/`, `/auth/login`, `/auth/register`) |
 
 The public pages carry a canonical link, a description, and Open Graph /
@@ -195,7 +196,11 @@ that server), `POST /mock/servers/{name}/advance` to move a server one
 step along provisioning → waking → awake right away, and
 `POST /mock/servers/{name}/cluster-error` with `{ "detail": "..." }` to make
 wake and delete on that server answer `502 { "detail" }` the way `dsh-api`
-does when a cluster operation fails (`{ "detail": null }` clears it).
+does when a cluster operation fails (`{ "detail": null }` clears it),
+`POST /mock/limits` with any of the limits (for example
+`{ "servers_per_tenant": 2 }`) to change what `GET /api/v1/limits` answers
+until the next reset, and `GET /mock/api-calls`, the number of requests that
+have reached `/api/v1/*`.
 
 Nothing is seeded: create an account on `/auth/register` (any username of
 3-50 characters and a password with a lower- and uppercase letter, a digit
@@ -208,7 +213,7 @@ username `admin` as an administrator; every other account is a normal user.
 npm run lint
 npm run typecheck
 npm run build
-npm test            # Playwright: register → sign in → create (202 → provisioning → online, 409 while pending, provisioning/stopped pills) → see → delete, a name taken by another account or containing "omcsi", the create proxy trimming the name and MOTD, leaving a blank or non-string MOTD out and treating a non-string name as empty, the create, feedback and password handlers' 400 for a body that is not a JSON object, another account's server as not found, a 502 from the API, a taken username at registration, protected pages sending a signed-out visitor to sign in, the server and feedback proxies' sign-in rule, feedback → admin, the feedback proxy keeping only a portal path as the page and treating a non-string message as empty, change password (its handler's sign-in rule, and any other refusal in the handler's own words), a dead session going to the sign-in form with its cookie cleared, from a poll or straight from a server-rendered page, plugins (install with a dependency, remove, restart to apply, selection off, the proxies' sign-in rule and apply's exact-true confirm), 3D export (export, preview, download, delete, a live copy, a failure, a chosen area, the daily limit, switched off, the proxies' sign-in rule and preview file filter, the preview by taps on an iPhone profile), dark/light toggle, SEO tags + robots.txt + sitemap, desktop + 400px phone
+npm test            # Playwright: register → sign in → create (202 → provisioning → online, 409 while pending, provisioning/stopped pills) → see → delete, a name taken by another account or containing "omcsi", the create proxy trimming the name and MOTD, leaving a blank or non-string MOTD out and treating a non-string name as empty, the create, feedback and password handlers' 400 for a body that is not a JSON object, another account's server as not found, a 502 from the API, a taken username at registration, protected pages sending a signed-out visitor to sign in, the server and feedback proxies' sign-in rule, feedback → admin, the feedback proxy keeping only a portal path as the page and treating a non-string message as empty, change password (its handler's sign-in rule, and any other refusal in the handler's own words), a dead session going to the sign-in form with its cookie cleared, from a poll or straight from a server-rendered page, plugins (install with a dependency, remove, restart to apply, selection off, the proxies' sign-in rule and apply's exact-true confirm), 3D export (export, preview, download, delete, a live copy, a failure, a chosen area, the daily limit, switched off, the proxies' sign-in rule and preview file filter, the preview by taps on an iPhone profile), dark/light toggle, SEO tags + robots.txt + sitemap, the health route calling nothing upstream and the Deployment's probes using it, the limits worded for counts of one and above, desktop + 400px phone
 ```
 
 `npm test` starts the mock (with `MOCK_PROVISION_MS` set high, so the tests
@@ -251,3 +256,6 @@ kubectl apply -k deploy/
 The ConfigMap points at `dsh-api` (Service `dsh-api.dsh-api`, port 80) and
 UserAuth (Service `userauth.userauth`, port 9998) by their in-cluster names;
 adjust there if either moves.
+
+The readiness and liveness probes use `/api/health` rather than `/`, as the
+home page calls `dsh-api` and a slow answer would fail the probe's timeout.
