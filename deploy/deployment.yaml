@@ -37,7 +37,7 @@ spec:
               memory: 128Mi
             limits:
               memory: 384Mi
-          # Not a page: those call dsh-api, and a slow API must not restart the portal.
+          # Not /: the home page calls dsh-api, and a slow API must not restart the portal.
           readinessProbe:
             httpGet:
               path: /api/health
