@@ -138,6 +138,10 @@ test("the feedback proxies need sign-in; their own checks run first", async ({ p
   // The filter, the id and the body are checked before the session, so these 400s are the portal's, not the API's.
   expect((await page.request.get("/api/feedback?status=everything")).status()).toBe(400);
   expect((await page.request.patch("/api/feedback/one", { data: { status: "read" } })).status()).toBe(400);
+  // Ids that Number() would read as another item (1, or a rounded 2^53) are not ids either.
+  for (const id of ["0x1", "1e0", "1.0", "%201", "-1", "9007199254740993"]) {
+    expect((await page.request.patch(`/api/feedback/${id}`, { data: { status: "read" } })).status(), id).toBe(400);
+  }
   expect((await page.request.patch("/api/feedback/1", { data: { status: "done" } })).status()).toBe(400);
   const notJson = { data: "not json", headers: { "content-type": "text/plain" } };
   expect((await page.request.post("/api/feedback", notJson)).status()).toBe(400);
