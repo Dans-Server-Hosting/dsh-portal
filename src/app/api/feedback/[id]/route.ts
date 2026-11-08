@@ -10,8 +10,9 @@ type Params = { params: Promise<{ id: string }> };
 /** Admin only upstream: a non-admin gets dsh-api's 403 passed straight through. */
 export async function PATCH(request: NextRequest, { params }: Params) {
   const { id } = await params;
-  const numericId = Number(id);
-  if (!Number.isInteger(numericId) || numericId < 0) {
+  // Digits only: Number() alone would read "0x1", "1e0", "1.0" or " 1" as item 1.
+  const numericId = /^\d+$/.test(id) ? Number(id) : NaN;
+  if (!Number.isSafeInteger(numericId)) {
     return NextResponse.json({ message: "The feedback id must be a number." }, { status: 400 });
   }
   const body = await jsonObject(request);
