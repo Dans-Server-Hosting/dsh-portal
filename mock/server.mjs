@@ -36,6 +36,12 @@
 //                                          world-export/preview, from the exporter's 26.3 fixture world)
 //   POST   /api/v1/servers/{name}/exports/{id}/link       { url, expires_at } → GET /mock/download/{token}
 //                                          serves a small zip with no session, as the signed link does
+//   GET    /api/v1/servers/{name}/thumbnail   the world thumbnail (RFC 0034) | 404 none yet | 503 switched off
+//   POST   /api/v1/servers/{name}/thumbnail   202 queued, then running → ready over MOCK_THUMBNAIL_MS
+//                                          | 409 one being drawn / server being created | 429 after 3 a day
+//   GET    /api/v1/servers/{name}/thumbnail/{thumb.webp|poster.png}  a real Strata turntable of the
+//                                          exporter's 26.3 fixture world (mock/fixtures/world-thumbnail),
+//                                          ETag + 304 on If-None-Match
 //   GET    /api/v1/me                      { username, is_admin }  (admin when the username is "admin")
 //   POST   /api/v1/feedback                201 | 422 message missing/too long | 429 more than 10 an hour
 //   GET    /api/v1/feedback?status=new|read|all   admin only (403), newest first
@@ -60,6 +66,8 @@
 //   POST   /mock/world-export              { enabled, outcome? } switches world export on or off, as
 //                                          DSH_WORLD_EXPORT does (off unless MOCK_WORLD_EXPORT=1), and sets
 //                                          how the next exports finish: { snapshot } or { error }
+//   POST   /mock/thumbnails                { mode, outcome? } sets DSH_WORLD_THUMBNAILS ("off" unless
+//                                          MOCK_THUMBNAILS=manual) and how the next runs finish: {} or { error }
 //   POST   /mock/limits                    { servers_per_tenant, ... } overrides what GET /api/v1/limits
 //                                          answers (and the cap it enforces) until a reset
 //   GET    /mock/api-calls                 { count } of requests to /api/v1/* so far, to show a route
@@ -101,6 +109,8 @@ const LIMITS = {
   export_max_size: 512,
   export_daily_limit: 5,
   export_retention_hours: 72,
+  thumbnail_mode: process.env.MOCK_THUMBNAILS === "manual" ? "manual" : "off",
+  thumbnail_daily_limit: 3,
 };
 const DEFAULT_LIMITS = { ...LIMITS };
 let apiCalls = 0;
@@ -123,6 +133,21 @@ const exportStarts = new Map();
 const exportTimers = new Set();
 /** @type {Map<string, {server: string, id: string}>} download token -> export */
 const downloadTokens = new Map();
+
+// ---- World thumbnails (RFC 0034) ----
+const THUMBNAIL_MS = Number(process.env.MOCK_THUMBNAIL_MS || 2000);
+const THUMB_FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "world-thumbnail");
+const THUMBNAIL_FILES = new Map([
+  ["thumb.webp", { body: readFileSync(path.join(THUMB_FIXTURES, "thumb.webp")), type: "image/webp" }],
+  ["poster.png", { body: readFileSync(path.join(THUMB_FIXTURES, "poster.png")), type: "image/png" }],
+]);
+/** How the next thumbnail runs finish: {} or { error }. */
+let thumbnailOutcome = {};
+/** @type {Map<string, object>} server -> its one thumbnail view */
+const thumbnails = new Map();
+/** @type {Map<string, number[]>} server -> run start times, for the daily limit */
+const thumbnailStarts = new Map();
+const thumbnailTimers = new Set();
 
 // What dsh-api derives from DSH_DEFAULT_PLUGINS, in install order.
 const DEFAULT_PLUGINS = [
@@ -503,7 +528,18 @@ async function handle(req, res) {
     exportsByServer.clear();
     exportStarts.clear();
     downloadTokens.clear();
+    for (const t of thumbnailTimers) clearTimeout(t);
+    thumbnailTimers.clear();
+    thumbnails.clear();
+    thumbnailStarts.clear();
+    thumbnailOutcome = {};
     Object.assign(LIMITS, DEFAULT_LIMITS);
+    return send(res, 204);
+  }
+  if (method === "POST" && pathname === "/mock/thumbnails") {
+    const body = (await readJson(req)) ?? {};
+    if (body.mode === "off" || body.mode === "manual") LIMITS.thumbnail_mode = body.mode;
+    if (body.outcome && typeof body.outcome === "object") thumbnailOutcome = body.outcome;
     return send(res, 204);
   }
   if (method === "POST" && pathname === "/mock/limits") {
@@ -666,6 +702,9 @@ async function handle(req, res) {
   m = /^\/api\/v1\/servers\/([^/]+)\/exports(?:\/([^/]+)(?:\/(link|preview\/[^/]+))?)?$/.exec(pathname);
   if (m) return handleExports(req, res, tenant, servers.get(m[1]), m[2] ?? null, m[3] ?? null);
 
+  m = /^\/api\/v1\/servers\/([^/]+)\/thumbnail(?:\/([^/]+))?$/.exec(pathname);
+  if (m) return handleThumbnail(req, res, servers.get(m[1]), m[2] ? decodeURIComponent(m[2]) : null);
+
   m = /^\/api\/v1\/servers\/([^/]+)\/plugins(?:\/([^/]+))?$/.exec(pathname);
   if (m) return handlePlugins(req, res, servers.get(m[1]), m[2] ? decodeURIComponent(m[2]) : null);
 
@@ -698,6 +737,7 @@ async function handle(req, res) {
     }
     stopProgression(server);
     servers.delete(server.name);
+    thumbnails.delete(server.name); // deleted with its server (RFC 0034 §5)
     return send(res, 204);
   }
   return send(res, 405, { message: "method not allowed" });
@@ -872,6 +912,79 @@ async function handleExports(req, res, tenant, server, id, sub) {
     }
     res.writeHead(200, { "content-type": file.endsWith(".json") ? "application/json" : "application/octet-stream" });
     return res.end(PREVIEW_FILES.get(file));
+  }
+  return send(res, 405, { message: "method not allowed" });
+}
+
+/** queued → running → ready (or failed, keeping the previous picture), over THUMBNAIL_MS. */
+function runThumbnail(view) {
+  const outcome = { ...thumbnailOutcome };
+  const step = (delay, fn) => {
+    const timer = setTimeout(() => {
+      thumbnailTimers.delete(timer);
+      fn();
+    }, delay);
+    thumbnailTimers.add(timer);
+  };
+  step(THUMBNAIL_MS / 3, () => Object.assign(view, { status: "running", phase: "thumbnail" }));
+  step(THUMBNAIL_MS, () => {
+    if (outcome.error) return Object.assign(view, { status: "failed", phase: null, error: outcome.error });
+    Object.assign(view, {
+      status: "ready",
+      phase: null,
+      error: null,
+      rendered_at: new Date().toISOString(),
+      has_picture: true,
+      area: { x1: -96, z1: -64, x2: 31, z2: 63 },
+      snapshot: "at_rest",
+      strata: "0.6.0",
+      frames: 12,
+      size: [200, 132],
+      ms: 250,
+    });
+  });
+}
+
+async function handleThumbnail(req, res, server, file) {
+  const method = req.method || "GET";
+  if (LIMITS.thumbnail_mode === "off") return send(res, 503, { detail: "world thumbnails are not enabled" });
+  if (!server) return send(res, 404, { detail: "no such server" });
+  const view = thumbnails.get(server.name);
+  if (!file && method === "GET") return view ? send(res, 200, view) : send(res, 404, { detail: "no picture yet" });
+  if (!file && method === "POST") {
+    if (server.state === "provisioning" || server.state === "failed") {
+      return send(res, 409, { detail: `the server is ${server.state}; try again once it is up` });
+    }
+    if (view && (view.status === "queued" || view.status === "running")) {
+      return send(res, 409, { detail: "the picture is already being drawn" });
+    }
+    const now = Date.now();
+    const starts = (thumbnailStarts.get(server.name) ?? []).filter((t) => now - t < 24 * HOUR_MS);
+    if (starts.length >= LIMITS.thumbnail_daily_limit) {
+      const retryAfter = Math.ceil((starts[0] + 24 * HOUR_MS - now) / 1000);
+      return send(res, 429, {
+        detail: `the picture can be refreshed ${LIMITS.thumbnail_daily_limit} times a day; try again later`,
+        retry_after: retryAfter,
+      });
+    }
+    thumbnailStarts.set(server.name, [...starts, now]);
+    const next = view ?? { server: server.name, rendered_at: null, has_picture: false };
+    Object.assign(next, { status: "queued", phase: null, error: null, requested_at: new Date(now).toISOString() });
+    thumbnails.set(server.name, next);
+    runThumbnail(next);
+    return send(res, 202, next);
+  }
+  if (file && method === "GET") {
+    const entry = THUMBNAIL_FILES.get(file);
+    if (!entry || !view?.has_picture) return send(res, 404, { detail: "no picture yet" });
+    const etag = `"${view.rendered_at.replace(/[^0-9]/g, "")}-${file.split(".")[0]}"`;
+    const headers = { "cache-control": "private, max-age=300", etag };
+    if (req.headers["if-none-match"] === etag) {
+      res.writeHead(304, headers);
+      return res.end();
+    }
+    res.writeHead(200, { ...headers, "content-type": entry.type });
+    return res.end(entry.body);
   }
   return send(res, 405, { message: "method not allowed" });
 }

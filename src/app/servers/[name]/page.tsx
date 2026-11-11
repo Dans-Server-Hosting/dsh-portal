@@ -24,14 +24,29 @@ export default async function ServerPage({ params }: Props) {
     // switched off, and the page then shows the default plugins instead.
     // World exports likewise answer 503 while world export is switched off
     // (RFC 0021); the section is then not shown at all.
-    const [server, defaults, selection, exports, limits] = await Promise.all([
+    // The world thumbnail (RFC 0034) answers 503 while switched off (no
+    // section) and 404 while there is no picture yet (a section offering one).
+    const [server, defaults, selection, exports, limits, thumbnail] = await Promise.all([
       api.getServer(session.token, name),
       api.defaultPlugins().catch(() => []),
       api.serverPlugins(session.token, name).catch(() => null),
       api.listExports(session.token, name).then((r) => r.exports).catch(() => null),
       api.limits().catch(() => null),
+      api
+        .getThumbnail(session.token, name)
+        .then((view) => ({ view }))
+        .catch((error) => (error instanceof ApiError && error.status === 404 ? { view: null } : null)),
     ]);
-    return <ServerDetail initial={server} defaultPlugins={defaults} plugins={selection} exports={exports} limits={limits} />;
+    return (
+      <ServerDetail
+        initial={server}
+        defaultPlugins={defaults}
+        plugins={selection}
+        exports={exports}
+        limits={limits}
+        thumbnail={thumbnail}
+      />
+    );
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) notFound();
     if (error instanceof ApiError && error.status === 401) return <SessionExpired />;

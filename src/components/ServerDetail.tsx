@@ -12,13 +12,14 @@ import Typography from "@mui/material/Typography";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { portalFetch } from "@/lib/client";
 import { usePolling } from "@/lib/usePolling";
-import type { DefaultPlugin, Limits, Server, ServerPlugins, WorldExport } from "@/lib/types";
+import type { DefaultPlugin, Limits, Server, ServerPlugins, WorldExport, WorldThumbnail } from "@/lib/types";
 import { DefaultPluginList } from "./DefaultPlugins";
 import PluginsSection from "./PluginsSection";
 import ServerActions from "./ServerActions";
 import ServerAddress from "./ServerAddress";
 import StatePill from "./StatePill";
 import WorldExportSection from "./WorldExportSection";
+import WorldThumbnailSection from "./WorldThumbnail";
 
 function describeState(server: Server): string {
   switch (server.state) {
@@ -60,6 +61,7 @@ export default function ServerDetail({
   plugins = null,
   exports = null,
   limits = null,
+  thumbnail = null,
 }: {
   initial: Server;
   defaultPlugins?: DefaultPlugin[];
@@ -68,6 +70,8 @@ export default function ServerDetail({
   /** The server's world exports; null while dsh-api has world export switched off (RFC 0021). */
   exports?: WorldExport[] | null;
   limits?: Limits | null;
+  /** The world thumbnail (RFC 0034): null while switched off; `view` is null while there is no picture yet. */
+  thumbnail?: { view: WorldThumbnail | null } | null;
 }) {
   const router = useRouter();
   const load = useCallback(() => portalFetch<Server>(`/api/servers/${encodeURIComponent(initial.name)}`), [initial.name]);
@@ -122,6 +126,7 @@ export default function ServerDetail({
           </Stack>
         </CardContent>
       </Card>
+      {thumbnail && <WorldThumbnailSection server={server.name} initial={thumbnail.view} />}
       {plugins ? (
         <PluginsSection initial={plugins} />
       ) : defaultPlugins.length > 0 && (

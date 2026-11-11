@@ -128,3 +128,16 @@ export async function setMockWorldExport(enabled: boolean, outcome?: { snapshot?
   });
   expect(response.ok).toBeTruthy();
 }
+
+/**
+ * Sets the mock's DSH_WORLD_THUMBNAILS ("off" or "manual") and how the next
+ * thumbnail runs finish ({} or { error }).
+ */
+export async function setMockThumbnails(mode: "off" | "manual", outcome?: { error?: string }) {
+  const response = await fetch(`${MOCK_URL}/mock/thumbnails`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ mode, outcome }),
+  });
+  expect(response.ok).toBeTruthy();
+}
