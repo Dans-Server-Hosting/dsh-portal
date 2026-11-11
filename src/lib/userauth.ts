@@ -1,18 +1,11 @@
 import "server-only";
-import { userAuthUrl } from "./config";
+import { userAuthChangePasswordPath, userAuthUrl } from "./config";
 
 /**
  * The portal's view of UserAuth, which is a plain REST API with no hosted
  * pages. Only server code talks to it, and only these calls are used.
  */
 
-/**
- * Where UserAuth's change-password endpoint lives. It is `POST /password` by
- * default; USERAUTH_CHANGE_PASSWORD_PATH overrides it (for example
- * `/password/change`) so the portal need not be rebuilt if the path settles
- * differently. The mock reads the same variable.
- */
-export const USERAUTH_CHANGE_PASSWORD_PATH = process.env.USERAUTH_CHANGE_PASSWORD_PATH?.trim() || "/password";
 export class UserAuthError extends Error {
   constructor(
     public readonly status: number,
@@ -81,7 +74,7 @@ export const userAuth = {
    * password breaks the policy or equals the current one.
    */
   changePassword: (token: string, currentPassword: string, newPassword: string) =>
-    call<void>(USERAUTH_CHANGE_PASSWORD_PATH, { method: "POST", token, body: JSON.stringify({ currentPassword, newPassword }) }),
+    call<void>(userAuthChangePasswordPath(), { method: "POST", token, body: JSON.stringify({ currentPassword, newPassword }) }),
   /** Best effort: a failure here must not stop the cookie being cleared. */
   logout: async (token: string): Promise<void> => {
     try {

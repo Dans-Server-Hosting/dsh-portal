@@ -145,7 +145,7 @@ All variables are read on the server only; nothing is exposed as
 |---|---|
 | `DSH_API_URL` | Base URL of `dsh-api`, e.g. `https://api.example.com` |
 | `USERAUTH_URL` | Base URL of UserAuth's REST API (`POST /login`, `/register`, `/logout`, the change-password endpoint) |
-| `USERAUTH_CHANGE_PASSWORD_PATH` | Path of UserAuth's change-password endpoint under `USERAUTH_URL`; defaults to `/password` |
+| `USERAUTH_CHANGE_PASSWORD_PATH` | Path of UserAuth's change-password endpoint under `USERAUTH_URL`; defaults to `/password`, and a value without its leading `/` gets one |
 | `PORTAL_URL` | The portal's own public origin, used for redirects after sign-out (defaults to the request origin) |
 | `DSH_SECURE_COOKIE` | `0` allows the session cookie over plain http for local development; defaults to on in production |
 
@@ -217,7 +217,9 @@ npm test            # Playwright: register → sign in → create (202 → provi
 ```
 
 `npm test` starts the mock (with `MOCK_PROVISION_MS` set high, so the tests
-drive provisioning with the `advance` control) and the standalone production
+drive provisioning with the `advance` control; both it and the portal get
+`USERAUTH_CHANGE_PASSWORD_PATH=password/change`, so the account tests cover a
+non-default path written without its leading slash) and the standalone production
 server itself (`npm run build` must have run first). It saves a full-page screenshot of
 every page at both viewports under `test-results/screenshots/` and asserts
 that no page scrolls horizontally; CI uploads those screenshots as an
