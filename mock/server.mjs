@@ -76,7 +76,10 @@ const PORT = Number(process.env.MOCK_PORT || 4000);
 const WAKE_MS = Number(process.env.MOCK_WAKE_MS || 3000);
 // A fresh server spends half of this provisioning and half waking before it is awake.
 const PROVISION_MS = Number(process.env.MOCK_PROVISION_MS || 6000);
-const CHANGE_PASSWORD_PATH = process.env.USERAUTH_CHANGE_PASSWORD_PATH?.trim() || "/password";
+// Read as the portal reads it (src/lib/config.ts): a value without its leading slash gets one.
+const CHANGE_PASSWORD_PATH = ((value) => (value.startsWith("/") ? value : `/${value}`))(
+  process.env.USERAUTH_CHANGE_PASSWORD_PATH?.trim() || "/password",
+);
 const NAME_RE = /^[a-z][a-z0-9-]{1,30}$/;
 const ADMIN_USERNAME = "admin";
 const FEEDBACK_MAX_LENGTH = 4000;

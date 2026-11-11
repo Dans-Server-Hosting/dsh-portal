@@ -6,6 +6,9 @@ const MOCK_PORT = 4000;
 const PORTAL_PORT = 3000;
 export const MOCK_URL = `http://127.0.0.1:${MOCK_PORT}`;
 const PORTAL_URL = `http://localhost:${PORTAL_PORT}`;
+// A non-default change-password path, written without its leading slash, so
+// the account tests only pass while the portal and the mock both add it.
+const CHANGE_PASSWORD_PATH = "password/change";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -40,7 +43,13 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       // Provisioning is driven by the tests (POST /mock/servers/{name}/advance),
       // so it must not move on its own while a step is being looked at.
-      env: { MOCK_PORT: String(MOCK_PORT), MOCK_WAKE_MS: "2000", MOCK_PROVISION_MS: "600000", MOCK_EXPORT_MS: "3000" },
+      env: {
+        MOCK_PORT: String(MOCK_PORT),
+        MOCK_WAKE_MS: "2000",
+        MOCK_PROVISION_MS: "600000",
+        MOCK_EXPORT_MS: "3000",
+        USERAUTH_CHANGE_PASSWORD_PATH: CHANGE_PASSWORD_PATH,
+      },
     },
     {
       // The standalone server is what the Dockerfile ships, so it is what is tested.
@@ -54,6 +63,7 @@ export default defineConfig({
         DSH_API_URL: MOCK_URL,
         USERAUTH_URL: `${MOCK_URL}/userauth`,
         PORTAL_URL,
+        USERAUTH_CHANGE_PASSWORD_PATH: CHANGE_PASSWORD_PATH,
       },
     },
   ],
