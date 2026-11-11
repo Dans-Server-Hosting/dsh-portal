@@ -10,16 +10,18 @@ import AddIcon from "@mui/icons-material/Add";
 import { portalFetch } from "@/lib/client";
 import { plural } from "@/lib/text";
 import { usePolling } from "@/lib/usePolling";
-import type { Server } from "@/lib/types";
+import type { Server, WorldThumbnail } from "@/lib/types";
 import ServerCard from "./ServerCard";
 
 interface Props {
   initial: Server[];
   maxServers: number | null;
+  /** World thumbnails by server name (RFC 0034); empty while they are switched off. */
+  thumbnails?: Record<string, WorldThumbnail | null>;
 }
 
 /** The signed-in user's servers, refreshed every few seconds without a reload. */
-export default function ServerList({ initial, maxServers }: Props) {
+export default function ServerList({ initial, maxServers, thumbnails = {} }: Props) {
   const load = useCallback(() => portalFetch<Server[]>("/api/servers"), []);
   const { data: servers, setData, error: pollError, updatedAt, refresh } = usePolling(load, initial);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -73,7 +75,14 @@ export default function ServerList({ initial, maxServers }: Props) {
         </Box>
       ) : (
         servers.map((server) => (
-          <ServerCard key={server.name} server={server} onChanged={replace} onDeleted={refresh} onError={setActionError} />
+          <ServerCard
+            key={server.name}
+            server={server}
+            onChanged={replace}
+            onDeleted={refresh}
+            onError={setActionError}
+            thumbnail={thumbnails[server.name] ?? null}
+          />
         ))
       )}
       <Typography variant="caption" color="text.secondary" data-testid="last-refresh">

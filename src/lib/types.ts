@@ -26,6 +26,9 @@ export interface Limits {
   export_max_size?: number;
   export_daily_limit?: number;
   export_retention_hours?: number;
+  // World thumbnails (RFC 0034): "off" or "manual"; absent on an older dsh-api.
+  thumbnail_mode?: "off" | "manual";
+  thumbnail_daily_limit?: number;
 }
 
 // Exactly what dsh-api's GET /api/v1/default-plugins returns: the plugins
@@ -131,6 +134,31 @@ export interface ExportLink {
 
 /** The usd-web files an export's preview is made of. */
 export const PREVIEW_FILE_PATTERN = /^(index\.json|t\.-?\d+\.-?\d+\.[0-9a-f]+\.uwt)$/;
+
+// ---- World thumbnails (RFC 0034) ----
+
+export type ThumbnailStatus = "queued" | "running" | "ready" | "failed";
+
+/** GET /api/v1/servers/{name}/thumbnail: the server's one small rotating picture. */
+export interface WorldThumbnail {
+  server: string;
+  status: ThumbnailStatus;
+  phase: string | null;
+  error: string | null;
+  requested_at: string;
+  /** When the picture on disk was drawn; null while there is none. */
+  rendered_at: string | null;
+  /** A failed refresh keeps the previous picture, so this can be true while status is "failed". */
+  has_picture: boolean;
+  area?: ExportArea;
+  snapshot?: ExportSnapshot;
+  frames?: number;
+  size?: [number, number];
+}
+
+/** The two files a thumbnail is served as; nothing else is proxied. */
+export const THUMBNAIL_FILES = ["thumb.webp", "poster.png"] as const;
+export type ThumbnailFile = (typeof THUMBNAIL_FILES)[number];
 
 // ---- Plugin selection (RFC 0020) ----
 

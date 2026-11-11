@@ -20,6 +20,7 @@ import type {
   ExportLink,
   WorldExport,
   WorldExportList,
+  WorldThumbnail,
 } from "./types";
 
 /** What the user is told when dsh-api gave no answer; a 502 with a detail is not that. */
@@ -104,6 +105,24 @@ export async function fetchExportPreview(token: string, name: string, id: string
   );
 }
 
+/**
+ * A thumbnail file (RFC 0034), passed through as bytes. ``If-None-Match`` is
+ * forwarded so an unchanged picture costs a 304, not the bytes.
+ */
+export async function fetchThumbnailFile(
+  token: string,
+  name: string,
+  file: string,
+  ifNoneMatch: string | null,
+): Promise<Response> {
+  const headers: Record<string, string> = { authorization: `Bearer ${token}` };
+  if (ifNoneMatch) headers["if-none-match"] = ifNoneMatch;
+  return fetch(`${apiBaseUrl()}/api/v1/servers/${encodeURIComponent(name)}/thumbnail/${encodeURIComponent(file)}`, {
+    headers,
+    cache: "no-store",
+  });
+}
+
 export const api = {
   limits: () => call<Limits>("/api/v1/limits"),
   defaultPlugins: () => call<DefaultPlugin[]>("/api/v1/default-plugins"),
@@ -154,6 +173,12 @@ export const api = {
       token,
       method: "POST",
     }),
+  /** 404 when there is no picture and none was asked for; 503 while thumbnails are switched off. */
+  getThumbnail: (token: string, name: string) =>
+    call<WorldThumbnail>(`/api/v1/servers/${encodeURIComponent(name)}/thumbnail`, { token }),
+  /** 202 with `queued`; 409 while one is being drawn; 429 { retry_after } at the daily limit. */
+  refreshThumbnail: (token: string, name: string) =>
+    call<WorldThumbnail>(`/api/v1/servers/${encodeURIComponent(name)}/thumbnail`, { token, method: "POST" }),
   me: (token: string) => call<Me>("/api/v1/me", { token }),
   submitFeedback: (token: string, body: FeedbackRequest) =>
     call<Feedback>("/api/v1/feedback", { token, method: "POST", body: JSON.stringify(body) }),
