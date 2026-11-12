@@ -210,7 +210,16 @@ its preview serves a real usd-web tile set committed in
 `mock/fixtures/world-export/preview/` (exported from Minecraft-USD-Exporter's
 26.3 fixture world), the link endpoint returns a `/mock/download/{token}` URL
 that serves a small zip without a session, and the sixth export in a day is
-the 429. The mock also has test-only controls: `POST /mock/reset`,
+the 429. World thumbnails are **off** unless the mock is started with
+`MOCK_THUMBNAILS=manual` (`thumbnail_mode` in `GET /api/v1/limits` says
+`off`, the thumbnail endpoints answer 503 and nothing is shown);
+`POST /mock/thumbnails` with `{ "mode": "manual" }` switches them on while
+running, and an optional `"outcome": { "error": "..." }` makes the next runs
+fail (`{}` lets them succeed again). A run moves from `queued` through
+`running` to `ready` over `MOCK_THUMBNAIL_MS` (default 2 s), the picture is
+the committed fixture in `mock/fixtures/world-thumbnail/` (`thumb.webp` and
+`poster.png`), and the fourth run on a server in a day is the 429. The mock
+also has test-only controls: `POST /mock/reset`,
 `POST /mock/feedback/reset`, `POST /mock/servers/{name}/state` with
 `{ "state": "awake", "players_online": 1 }` to simulate a player joining (or
 `"stopped"`, or anything else; it also stops the automatic progression for
@@ -235,7 +244,7 @@ username `admin` as an administrator; every other account is a normal user.
 npm run lint
 npm run typecheck
 npm run build
-npm test            # Playwright: register → sign in → create (202 → provisioning → online, 409 while pending, provisioning/stopped pills) → see → delete, a name taken by another account or containing "omcsi", the create proxy trimming the name and MOTD, leaving a blank or non-string MOTD out and treating a non-string name as empty, the create, feedback and password handlers' 400 for a body that is not a JSON object, another account's server as not found, a 502 from the API, a taken username at registration, protected pages sending a signed-out visitor to sign in, the server and feedback proxies' sign-in rule, feedback → admin, the feedback proxy keeping only a portal path as the page and treating a non-string message as empty, change password (its handler's sign-in rule, and any other refusal in the handler's own words), a dead session going to the sign-in form with its cookie cleared, from a poll or straight from a server-rendered page, plugins (install with a dependency, remove, restart to apply, selection off, the proxies' sign-in rule and apply's exact-true confirm), 3D export (export, preview, download, delete, a live copy, a failure, a chosen area, the daily limit, switched off, the proxies' sign-in rule and preview file filter, the preview by taps on an iPhone profile), dark/light toggle, SEO tags + robots.txt + sitemap, the health route calling nothing upstream and the Deployment's probes using it, the limits worded for counts of one and above, desktop + 400px phone
+npm test            # Playwright: register → sign in → create (202 → provisioning → online, 409 while pending, provisioning/stopped pills) → see → delete, a name taken by another account or containing "omcsi", the create proxy trimming the name and MOTD, leaving a blank or non-string MOTD out and treating a non-string name as empty, the create, feedback and password handlers' 400 for a body that is not a JSON object, another account's server as not found, a 502 from the API, a taken username at registration, protected pages sending a signed-out visitor to sign in, the server and feedback proxies' sign-in rule, feedback → admin, the feedback proxy keeping only a portal path as the page and treating a non-string message as empty, change password (its handler's sign-in rule, and any other refusal in the handler's own words), a dead session going to the sign-in form with its cookie cleared, from a poll or straight from a server-rendered page, plugins (install with a dependency, remove, restart to apply, selection off, the proxies' sign-in rule and apply's exact-true confirm), 3D export (export, preview, download, delete, a live copy, a failure, a chosen area, the daily limit, switched off, the proxies' sign-in rule and preview file filter, the preview by taps on an iPhone profile), the world thumbnail (draw it, see it on the server page and the card, the still poster for reduced motion, a failed refresh keeping the previous picture, the daily limit, switched off, the proxies' sign-in rule and file filter), dark/light toggle, SEO tags + robots.txt + sitemap, the health route calling nothing upstream and the Deployment's probes using it, the limits worded for counts of one and above, desktop + 400px phone
 ```
 
 `npm test` starts the mock (with `MOCK_PROVISION_MS` set high, so the tests
