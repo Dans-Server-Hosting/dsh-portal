@@ -107,14 +107,35 @@ running in the cluster.
   file comes straight from the API. The daily limit (429) is shown with the
   time to wait. While dsh-api has `DSH_WORLD_EXPORT` off (503) the section is
   not shown at all.
+- **World thumbnail** (RFC 0034, dsh-api `/api/v1/servers/{name}/thumbnail`):
+  a small looping 3D picture of the world around spawn, shown only to the
+  server's owner. On the server page, **Draw a picture** (then **Refresh
+  picture**) asks dsh-api to draw it, with progress, the reason when a run
+  fails (the previous picture is kept) and the daily limit. The card on
+  `/servers` then shows the picture and leads to the server page. A
+  `<picture>` serves the still poster to browsers that ask for reduced motion.
+  Both files come through same-origin proxies with the session's token. While
+  dsh-api has thumbnails off (503) nothing is shown.
+
+  ![The My servers page on a desktop: one card for a server named demo-world, asleep, with a small 3D picture of a forested patch of a Minecraft world above its name](docs/images/server-card-thumbnail-desktop.png)
+
+  <img src="docs/images/server-card-thumbnail-phone.png" width="300" alt="The same page on a phone: the card's picture spans the card's width">
+
+  *The mock's made-up `demo-world` with the mock's fixture picture (the
+  committed 26.3 fixture world of Minecraft-USD-Exporter, drawn by
+  `mc-usd-thumbnail`), at the Playwright desktop (1280 × 800) and phone
+  (400 × 800) viewports. The picture turns on the live page; a screenshot
+  holds one frame. Regenerate with `npm run build && README_SCREENSHOTS=1 npx
+  playwright test e2e/readme-screenshots.spec.ts` (the test is skipped
+  otherwise).*
 
 | Route | Shows |
 |---|---|
 | `/` | the free tier (limits fetched live from `GET /api/v1/limits`), what comes installed (`GET /api/v1/default-plugins`: name, version, description, link to the project) and where more plugins come from (the catalog on the server page while `GET /api/v1/catalog` answers, else the dashboard), how sleeping works, Sign in |
-| `/servers` | the signed-in user's servers: name, address to copy, state pill, Open dashboard, Wake, Delete |
+| `/servers` | the signed-in user's servers: name, address to copy, state pill, Open dashboard, Wake, Delete, and the world thumbnail when there is one |
 | `/servers/new` | name, MOTD, Minecraft username (becomes operator); a line naming the plugins it comes with → create (202); address + one-time password with a live status until online; 403/409/422 shown in plain language, "already being created" links to the pending server |
 | `/account` | who is signed in, and a change-password form (current, new, confirm, live rules) → UserAuth via `POST /api/account/password` |
-| `/servers/[name]` | one server: address, state, last woken, dashboard link, its plugins (install from the catalog, remove, restart to apply; the default plugins while selection is off), 3D export (while dsh-api has it on), delete with typed confirmation |
+| `/servers/[name]` | one server: address, state, last woken, dashboard link, its plugins (install from the catalog, remove, restart to apply; the default plugins while selection is off), 3D export (while dsh-api has it on), the world thumbnail with Draw/Refresh (while dsh-api has it on), delete with typed confirmation |
 | `/feedback` | a textarea with a counter → `POST /api/v1/feedback` with `page` = where the user came from; thanks on success |
 | `/admin/feedback` | admins only: feedback newest first, New / Read / All filter, Mark read / Mark new; "not found" for everyone else |
 | `/auth/login` | username + password → UserAuth `POST /login`; a 401 is shown plainly |
@@ -124,6 +145,7 @@ running in the cluster.
 | `/api/feedback`, `/api/feedback/[id]`, `/api/account/password` | the feedback proxies (send, the admin list with `?status=new\|read\|all`, `PATCH` an item to `read` or `new`; a bad filter, id or status, or a body that is not a JSON object, is the portal's own 400, and a message that is not a string counts as empty) and the change-password handler, which answers such a body with a 400 too and UserAuth's 401 for a wrong current password as a 403 so the browser does not take it for an expired session |
 | `/api/servers/[name]/plugins…`, `/api/catalog` | the plugin proxies: the server's plugins, install and remove one (`PUT` / `DELETE` `plugins/[slug]`), and `apply`, which sends `confirm_players: false` unless the browser sent exactly `true`; `/api/catalog` needs no session, as the catalog is public at `dsh-api` |
 | `/api/servers/[name]/exports…` | the world-export proxies: list/start, one/delete, `link`, and `preview/[file]`, which passes usd-web's `index.json` and `*.uwt` tiles through as bytes (any other file name is a 404) |
+| `/api/servers/[name]/thumbnail…` | the world-thumbnail proxies: the status and Draw/Refresh, and `[file]`, which passes only `thumb.webp` and `poster.png` through (any other file name is a 404) |
 | `/api/health` | what the Kubernetes probes ask: 200 with no session and no call to `dsh-api`, so a slow API does not restart the portal |
 | `/robots.txt`, `/sitemap.xml` | generated from `src/app/robots.ts` and `src/app/sitemap.ts`: the signed-in pages and `/api/` are disallowed, and the sitemap lists the public pages (`/`, `/auth/login`, `/auth/register`) |
 
