@@ -14,10 +14,10 @@
 | Route | Shows |
 |---|---|
 | `/` | what the free tier is (limits from `GET /api/v1/limits`), what comes installed (`GET /api/v1/default-plugins`) and where more plugins come from (the catalog while `GET /api/v1/catalog` answers, else the dashboard), how sleeping works, "Sign in" / "Create account" |
-| `/servers` | the signed-in user's servers: name, address to copy, state pill (provisioning / asleep / waking / awake / stopped / failed), "Open dashboard", "Wake", "Delete" |
+| `/servers` | the signed-in user's servers: name, address to copy, state pill (provisioning / asleep / waking / awake / stopped / failed), "Open dashboard", "Wake", "Delete", and the world thumbnail when there is one (only while thumbnails are on) |
 | `/servers/new` | name, MOTD, your Minecraft username (becomes operator), a line naming the plugins it comes with → create; the API answers 202 straight away and the page shows the address with a live status until the server is online; a second create while one is pending says so and links to it |
 | `/account` | who is signed in; change password (current, new, confirm, the same live rules as registration) through UserAuth |
-| `/servers/[name]` | one server: address, state, last woken, dashboard link, its plugins (install from the Dan's Plugins catalog, remove, restart to apply; the plugins installed by default while plugin selection is off), 3D export of the world with a usd-web preview and a zip download (only while world export is on), delete with confirmation |
+| `/servers/[name]` | one server: address, state, last woken, dashboard link, its plugins (install from the Dan's Plugins catalog, remove, restart to apply; the plugins installed by default while plugin selection is off), 3D export of the world with a usd-web preview and a zip download (only while world export is on), the world thumbnail with Draw / Refresh (only while thumbnails are on), delete with confirmation |
 | `/auth/login`, `/auth/register` | the portal's own forms over UserAuth's REST API |
 | `/feedback` | a Feedback link on every signed-in page opens a textarea; the message and the page it was about go to `POST /api/v1/feedback` |
 | `/admin/feedback` | when `GET /api/v1/me` says `is_admin`: what users sent, newest first, New / Read / All, Mark read / Mark new; "not found" for anyone else |
@@ -44,4 +44,5 @@
 - `dsh-api` MVP, with the asynchronous create (202 + `provisioning`, 409 for a concurrent create) and `GET /api/v1/default-plugins`.
 - For the plugins section: `dsh-api`'s `GET /api/v1/catalog` and the per-server plugin endpoints (`/api/v1/servers/{name}/plugins`), live once `DSH_PLUGIN_SELECTION` is on; until then they answer 503 and the server page shows the default plugins.
 - For 3D export (RFC 0021): `dsh-api`'s world-export endpoints (`/api/v1/servers/{name}/exports`, with `link` and `preview/{file}`) and `export_default_size` / `export_max_size` in `GET /api/v1/limits`, live once `DSH_WORLD_EXPORT` is on; until then they answer 503 and the server page has no 3D export section.
+- For world thumbnails (RFC 0034): `dsh-api`'s thumbnail endpoints (`/api/v1/servers/{name}/thumbnail`, with `thumb.webp` and `poster.png`) and `thumbnail_mode` in `GET /api/v1/limits`, live once `DSH_WORLD_THUMBNAILS` is on; until then they answer 503 and no picture is shown.
 - UserAuth reachable in-cluster with registration open to the public, and its change-password endpoint (`POST /password` unless `USERAUTH_CHANGE_PASSWORD_PATH` says otherwise).
