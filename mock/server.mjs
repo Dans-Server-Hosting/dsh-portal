@@ -73,7 +73,9 @@
 //   GET    /mock/api-calls                 { count } of requests to /api/v1/* so far, to show a route
 //                                          reaches no further than the portal
 //   POST   /mock/reset                     also restores plugin selection to MOCK_PLUGIN_SELECTION,
-//                                          world export to MOCK_WORLD_EXPORT and the limits
+//                                          world export to MOCK_WORLD_EXPORT, thumbnails to MOCK_THUMBNAILS
+//                                          (thumbnail_mode is one of the limits), the limits, and how the
+//                                          next exports and thumbnail runs finish
 //   POST   /mock/feedback/reset            clear feedback and the rate-limit counters only
 import http from "node:http";
 import { readFileSync, readdirSync } from "node:fs";
