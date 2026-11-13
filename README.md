@@ -204,9 +204,10 @@ mock is started with `MOCK_WORLD_EXPORT=1` (its endpoints answer 503 and the
 server page has no 3D export section); `POST /mock/world-export` with
 `{ "enabled": true }` switches it while running, and an optional
 `"outcome": { "snapshot": "live_changing" }` or `{ "error": "..." }` sets how
-the next exports finish. An export moves from `queued` through the copying,
-exporting and packaging phases to `ready` over `MOCK_EXPORT_MS` (default 3 s);
-its preview serves a real usd-web tile set committed in
+the next exports finish (`POST /mock/reset` puts both back: on or off
+as `MOCK_WORLD_EXPORT` says, and exports that finish with an exact copy).
+An export moves from `queued` through the copying, exporting and packaging
+phases to `ready` over `MOCK_EXPORT_MS` (default 3 s); its preview serves a real usd-web tile set committed in
 `mock/fixtures/world-export/preview/` (exported from Minecraft-USD-Exporter's
 26.3 fixture world), the link endpoint returns a `/mock/download/{token}` URL
 that serves a small zip without a session, and the sixth export in a day is
@@ -215,9 +216,10 @@ the 429. World thumbnails are **off** unless the mock is started with
 `off`, the thumbnail endpoints answer 503 and nothing is shown);
 `POST /mock/thumbnails` with `{ "mode": "manual" }` switches them on while
 running, and an optional `"outcome": { "error": "..." }` makes the next runs
-fail (`{}` lets them succeed again). A run moves from `queued` through
-`running` to `ready` over `MOCK_THUMBNAIL_MS` (default 2 s), the picture is
-the committed fixture in `mock/fixtures/world-thumbnail/` (`thumb.webp` and
+fail (`{}` lets them succeed again); `POST /mock/reset` puts the mode back
+to what `MOCK_THUMBNAILS` says and lets runs succeed. A run moves from
+`queued` through `running` to `ready` over `MOCK_THUMBNAIL_MS` (default
+2 s), the picture is the committed fixture in `mock/fixtures/world-thumbnail/` (`thumb.webp` and
 `poster.png`), and the fourth run on a server in a day is the 429. The mock
 also has test-only controls: `POST /mock/reset`,
 `POST /mock/feedback/reset`, `POST /mock/servers/{name}/state` with
