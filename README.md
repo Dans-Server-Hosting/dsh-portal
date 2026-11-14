@@ -185,7 +185,9 @@ The mock (`mock/server.mjs`, zero dependencies, in-memory) implements the
 `/api/v1/default-plugins`, servers, `/api/v1/me`, the feedback endpoints
 with their 403 / 422 / 429 behaviours, and plugin selection: `/api/v1/catalog`
 and the per-server plugin endpoints, with a small catalog in which Fiefs and
-Currencies require Medieval Factions; `POST /mock/plugins` with
+Currencies require Medieval Factions and ViaBackwards requires ViaVersion, so
+a new server's ViaVersion, one of its default plugins, cannot be removed
+("Needed by ViaBackwards") while ViaBackwards is installed; `POST /mock/plugins` with
 `{ "enabled": false }` switches selection off, as `DSH_PLUGIN_SELECTION` does) plus UserAuth's
 `/register`, `/login`, `/session/validate`, `/logout` and the change-password
 endpoint (at `USERAUTH_CHANGE_PASSWORD_PATH`, default `/password`) with the
