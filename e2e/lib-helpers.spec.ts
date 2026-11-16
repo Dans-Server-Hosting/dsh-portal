@@ -42,6 +42,19 @@ test("relativeTime words how long ago something happened", () => {
   expect(relativeTime(ago(400 * 86400), now)).toBe("1 year ago");
 });
 
+test("relativeTime moves up a unit when the count rounds to the next unit's size", () => {
+  const now = Date.parse("2026-01-31T12:00:00Z");
+  const ago = (seconds: number) => new Date(now - seconds * 1000).toISOString();
+
+  expect(relativeTime(ago(59 * 60 + 29), now)).toBe("59 minutes ago");
+  expect(relativeTime(ago(59 * 60 + 30), now)).toBe("1 hour ago");
+  expect(relativeTime(ago(23 * 3600 + 30 * 60), now)).toBe("1 day ago");
+  expect(relativeTime(ago(6 * 86400 + 12 * 3600), now)).toBe("1 week ago");
+  expect(relativeTime(ago(29 * 86400), now)).toBe("4 weeks ago");
+  expect(relativeTime(ago(360 * 86400), now)).toBe("1 year ago");
+  expect(relativeTime(ago(364 * 86400), now)).toBe("1 year ago");
+});
+
 test("relativeTime calls a time in the future just now and passes an unreadable one through", () => {
   const now = Date.parse("2026-01-31T12:00:00Z");
   expect(relativeTime("2026-01-31T13:00:00Z", now)).toBe("just now");
